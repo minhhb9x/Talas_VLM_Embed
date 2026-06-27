@@ -1,0 +1,12 @@
+*.jpg
+*.png
+*.mp4
+*.jpeg
+__pycache__
+.venv
+vlm/
+training/
+wandb/
+eval_images/
+MMEB-eval_outputs/
+ER_outputs/
