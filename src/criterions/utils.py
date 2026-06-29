@@ -48,6 +48,28 @@ def get_hidden_text_vision(hidden_state, num_text_token, num_vision_token, atten
    
     return text_hidden_state, vision_hidden_state
 
+def pooling(last_hidden_state, attention_mask, mode='eos', normalize=True):
+    if mode == 'last' or mode == 'eos':
+        left_padding = (attention_mask[:, -1].sum() == attention_mask.shape[0])
+        batch_size = last_hidden_state.shape[0]
+        if left_padding:
+            # Get the vectors at the last position
+            reps = last_hidden_state[torch.arange(batch_size), -1, :]
+        else:
+            # Calculate last 1 position in the original tensor
+            max_length = last_hidden_state.size(1)
+            invert_mask = (attention_mask == 0).long()
+            num_padding_tokens = invert_mask.sum(dim=1)
+            eos_indices_positive = max_length - num_padding_tokens - 1
+            # Get the vectors at the last 1 position of each attention mask
+            reps = last_hidden_state[
+                torch.arange(batch_size, device=last_hidden_state.device), eos_indices_positive]
+    else:
+        raise NotImplementedError
+    if normalize:
+        reps = torch.nn.functional.normalize(reps, p=2, dim=-1)
+    return reps
+
 def get_unpadded_hidden(hidden_state, num_text_token, num_vision_token, attention_mask):
     '''
     Get hidden states for unpadded tokens (both text and vision)

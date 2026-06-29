@@ -20,6 +20,7 @@ from .kl_cosine_loss import KLCosineLoss
 from .compute_effective_rank import EffectiveRankLoss
 from .contrastive_pooling_loss import ContrastivePoolingLoss
 from .grad_aggregation import GradPoolingLoss
+from .talas import Talas
 
 criterion_list = {
     "contrastive": ContrastiveLoss,
@@ -45,6 +46,7 @@ criterion_list = {
     "eigen_rank_align_loss": ERAlign,
     "contrastive_pooling_loss": ContrastivePoolingLoss,
     "grad_pooling": GradPoolingLoss,
+    "talas": Talas,
 }
 
 def build_criterion(args):

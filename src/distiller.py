@@ -213,7 +213,7 @@ class Distiller(nn.Module):
                         layer = layer.to(dtype=torch.bfloat16)
                         seq.append(layer)
                 self.projectors[name] = seq
-        else:
+        elif self.training_args.teacher_layer_mapping:
             for _ in range(len(self.training_args.teacher_layer_mapping)):
                 projector = nn.Linear(
                     self.student_hidden_dim,
@@ -223,6 +223,17 @@ class Distiller(nn.Module):
                 projector_list.append(projector)
 
             self.projectors = projector_list
+        elif self.training_args.num_projectors > 0:
+            for _ in range(self.training_args.num_projectors):
+                projector = nn.Linear(
+                    self.student_hidden_dim,
+                    self.teacher_hidden_dim,
+                    dtype=torch.bfloat16
+                )
+                projector_list.append(projector)
+
+            self.projectors = nn.ModuleList(projector_list)
+
         print(f"Created {len(self.projectors)} linear projectors.")
     
     def add_optimizer_param_group(self, optimizer):
@@ -232,7 +243,8 @@ class Distiller(nn.Module):
                 "params": self.projectors.parameters(),
                 "lr": lr
             })
-        print("Projector parameters added to optimizer.")
+        print("-----------Projector parameters added to optimizer.----------")
+
         if self.model_args.modality_gated_pooling:
             optimizer.add_param_group({
                 "params": self.student.encoder.pool_v.parameters(),
@@ -242,7 +254,7 @@ class Distiller(nn.Module):
                 "params": self.student.encoder.pool_t.parameters(),
                 "lr": self.training_args.learning_rate
             })
-            print("Modality gated pooling parameters added to optimizer.")
+            print("-----------Modality gated pooling parameters added to optimizer.----------")
         return optimizer
     
 class DistillationCollator:

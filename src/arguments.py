@@ -105,6 +105,9 @@ class TrainingArguments(TrainingArguments):
     kd_loss_type: str = field(default="contrastive_rkd", metadata={"help": "type of kd loss, current only support RKD"})
     ds_config: str = field(default=None, metadata={"help": "DeepSpeed config json file path"})
     deepspeed_config: str = field(default=None, metadata={"help": "DeepSpeed config json file path"})
+    # args for TALAS
+    num_projectors: int = field(default=0, metadata={"help": "Number of projectors for distillation"})
+    num_self_kd_layers: int = field(default=0, metadata={"help": "Number of self-kd layers for distillation"})
     # new args for span loss
     teacher_layer_mapping: List[int] = field(
         default_factory=list,

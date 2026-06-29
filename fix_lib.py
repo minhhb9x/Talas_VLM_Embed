@@ -1,6 +1,6 @@
 import os
 
-file_path = "./vlm/lib/python3.12/site-packages/transformers/models/qwen2_vl/image_processing_qwen2_vl.py"
+file_path = "./vlm/lib/python3.11/site-packages/transformers/models/qwen2_vl/image_processing_qwen2_vl.py"
 
 start_line = 140
 end_line = 143

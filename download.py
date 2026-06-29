@@ -1,6 +1,10 @@
 import os
-import subprocess
+import zipfile
+from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from huggingface_hub import hf_hub_download
+
 
 # Danh sách zip file cần tải
 files = {
@@ -12,41 +16,74 @@ files = {
 }
 
 dataset = "TIGER-Lab/MMEB-train"
-save_dir = "./vlm2vec_train/MMEB-train/images"
 
-os.makedirs(save_dir, exist_ok=True)
+download_dir = Path("./downloads")
+save_dir = Path("./vlm2vec_train/MMEB-train/images")
 
-def fast_unzip(zip_path, output_dir):
+download_dir.mkdir(parents=True, exist_ok=True)
+save_dir.mkdir(parents=True, exist_ok=True)
+
+
+def unzip_python(zip_path: str | Path, output_dir: str | Path, remove_zip: bool = True):
     """
-    Giải nén bằng subprocess (unzip -q) để chạy nhanh
+    Giải nén zip bằng thư viện Python built-in.
+    Không cần lệnh unzip, không cần sudo.
     """
+    zip_path = Path(zip_path)
+    output_dir = Path(output_dir)
+
     print(f"📦 Unzipping {zip_path} ...")
-    subprocess.run(["unzip", "-q", zip_path, "-d", output_dir], check=True)
-    os.remove(zip_path)
-    print(f"✔️ Done {zip_path}")
 
-# Tải từng file bằng hf_hub_download
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        zf.extractall(output_dir)
+
+    if remove_zip:
+        zip_path.unlink()
+
+    print(f"✔️ Unzipped & removed {zip_path}")
+
+
+def get_local_zip_path(repo_path: str) -> Path:
+    """
+    hf_hub_download với local_dir sẽ lưu theo cấu trúc:
+    ./downloads/images_zip/ImageNet_1K.zip
+    """
+    return download_dir / repo_path
+
+
+# Tải từng file, nếu zip đã có thì skip
 local_paths = []
+
 for name, repo_path in files.items():
+    local_zip_path = get_local_zip_path(repo_path)
+
+    if local_zip_path.exists():
+        print(f"⏭️ Skip download, already exists: {local_zip_path}")
+        local_paths.append(local_zip_path)
+        continue
+
     print(f"⬇️ Downloading {name} ...")
+
     downloaded = hf_hub_download(
         repo_id=dataset,
         filename=repo_path,
-        local_dir="./downloads",   # tải tạm
-        repo_type="dataset"
+        local_dir=download_dir,
+        repo_type="dataset",
     )
-    local_paths.append(downloaded)
 
-# Giải nén song song
-processes = []
-for zip_file in local_paths:
-    p = subprocess.Popen(["unzip", "-q", zip_file, "-d", save_dir])
-    processes.append((p, zip_file))
+    local_paths.append(Path(downloaded))
 
-# Đợi tất cả hoàn thành
-for p, zip_file in processes:
-    p.wait()
-    os.remove(zip_file)
-    print(f"✔️ Unzipped & removed {zip_file}")
+
+# Giải nén song song bằng Python threads
+max_workers = min(len(local_paths), os.cpu_count() or 4)
+
+with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    futures = [
+        executor.submit(unzip_python, zip_file, save_dir, True)
+        for zip_file in local_paths
+    ]
+
+    for future in as_completed(futures):
+        future.result()
 
 print("🎉 All done!")
