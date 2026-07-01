@@ -156,9 +156,12 @@ class SingleCollator:
                                                           max_length=self.data_args.max_len,
                                                           )
         
+        # get encoded_dir from examples
+        encoded_dirs = [example["encoded_dir"] for example in examples]
         return {
             'qry': processed_qry_inputs,
-            'pos': processed_pos_inputs
+            'pos': processed_pos_inputs,
+            'encoded_dir': encoded_dirs
         }
 
 class SingleDataset(Dataset):
@@ -185,6 +188,10 @@ class SingleDataset(Dataset):
             subset_data = subset_data.remove_columns(set(['neg_text', 'neg_image_path']) & set(subset_data.column_names))
             subset_data = subset_data.remove_columns(set(subset_data.column_names) - set(['qry', 'qry_image_path', 'pos_image_path', 'pos_text_instruction']))
             subset_data = subset_data.rename_column("pos_text_instruction", "pos_text")
+            subset_data = subset_data.add_column(
+                "encoded_dir",
+                [f"{subset}/{idx}" for idx in range(len(subset_data))]
+            )
             train_data.append(subset_data)
             
         self.train_data = concatenate_datasets(train_data)
@@ -264,4 +271,5 @@ class SingleDataset(Dataset):
             "query_image": final_qry_images,
             "pos_text": final_pos_texts,
             "pos_image": final_pos_images,
+            "encoded_dir": self.train_data[data_idx]["encoded_dir"]
         }

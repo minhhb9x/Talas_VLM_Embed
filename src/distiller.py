@@ -315,7 +315,8 @@ class DistillationCollator:
         processed_student_pos_inputs = process_student_fn(student_pos_inputs, processor=self.student_processor, max_length=self.data_args.max_len)
         processed_teacher_qry_inputs = process_teacher_fn(teacher_qry_inputs, processor=self.teacher_processor, max_length=self.data_args.max_len)
         processed_teacher_pos_inputs = process_teacher_fn(teacher_pos_inputs, processor=self.teacher_processor, max_length=self.data_args.max_len)
-        
+        # get encoded_dir from examples
+        encoded_dirs = [example["encoded_dir"] for example in examples]
         return {
             'student_inputs':{
                 'qry': processed_student_qry_inputs,
@@ -324,7 +325,8 @@ class DistillationCollator:
             'teacher_inputs':{
                 'qry': processed_teacher_qry_inputs,
                 'pos': processed_teacher_pos_inputs
-            }
+            },
+            'encoded_dir': encoded_dirs
         }
         
 class DistillationDataset(Dataset):
@@ -351,6 +353,10 @@ class DistillationDataset(Dataset):
             subset_data = subset_data.remove_columns(set(['neg_text', 'neg_image_path']) & set(subset_data.column_names))
             subset_data = subset_data.remove_columns(set(subset_data.column_names) - set(['qry', 'qry_image_path', 'pos_image_path', 'pos_text_instruction']))
             subset_data = subset_data.rename_column("pos_text_instruction", "pos_text")
+            subset_data = subset_data.add_column(
+                "encoded_dir",
+                [f"{subset}/{idx}" for idx in range(len(subset_data))]
+            )
             train_data.append(subset_data)
             
         self.train_data = concatenate_datasets(train_data)
@@ -445,4 +451,5 @@ class DistillationDataset(Dataset):
             "teacher_query_image": teacher_qry_images,
             "teacher_pos_text": teacher_pos_texts,
             "teacher_pos_image": teacher_pos_images,
+            "encoded_dir": self.train_data[data_idx]["encoded_dir"]
         }
