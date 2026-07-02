@@ -233,6 +233,9 @@ class Distiller(nn.Module):
                 projector_list.append(projector)
 
             self.projectors = nn.ModuleList(projector_list)
+        else:
+            self.projectors = None
+            print("No projectors created.")
 
         if self.projectors:
             print(f"Created {len(self.projectors)} linear projectors.")
