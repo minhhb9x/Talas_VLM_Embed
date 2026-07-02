@@ -234,7 +234,8 @@ class Distiller(nn.Module):
 
             self.projectors = nn.ModuleList(projector_list)
 
-        print(f"Created {len(self.projectors)} linear projectors.")
+        if self.projectors:
+            print(f"Created {len(self.projectors)} linear projectors.")
     
     def add_optimizer_param_group(self, optimizer):
         if hasattr(self, 'projectors') and self.projectors is not None:
