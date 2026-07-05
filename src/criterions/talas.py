@@ -4,6 +4,7 @@ import torch.distributed as dist
 import torch.nn.functional as F
 from src.criterions.utils import count_clean_text_tokens, get_hidden_text, get_hidden_text_vision, pooling
 
+import os
 
 
 class Talas(nn.Module):
@@ -41,90 +42,56 @@ class Talas(nn.Module):
         loss = F.mse_loss(student_similarity, teacher_similarity)
 
         return loss
-    
-    def forward(self, distiller, input_data):
-        self.distiller = distiller
-        student_model = distiller.student
-        teacher_model = distiller.teacher
-        projectors = distiller.projectors
 
-        if getattr(self, "student_processor", None) is None:
-            self.student_processor = distiller.get_student_processor()
-        if getattr(self, "teacher_processor", None) is None:
-            self.teacher_processor = distiller.get_teacher_processor()
+    def get_teacher_representations(self, caching_dir, input_data):
+        encoded_dirs = input_data['encoded_dir'] # list
+        encoded_dirs = [os.path.join(caching_dir, encoded_dir) for encoded_dir in encoded_dirs]
 
-        student_processor = self.student_processor
-        teacher_processor = self.teacher_processor
+        teacher_qry_reps = torch.stack([torch.load(os.path.join(encoded_dir, 'qry.pt')) for encoded_dir in encoded_dirs])
+        teacher_pos_reps = torch.stack([torch.load(os.path.join(encoded_dir, 'pos.pt')) for encoded_dir in encoded_dirs])
 
-        student_tokenizer = student_processor.tokenizer
-        teacher_tokenizer = teacher_processor.tokenizer
-        
+        return teacher_qry_reps, teacher_pos_reps
 
-        student_qry_input = input_data['student_inputs']['qry']
-        student_pos_input = input_data['student_inputs']['pos']
-        
-        teacher_qry_input = input_data['teacher_inputs']['qry']
-        teacher_pos_input = input_data['teacher_inputs']['pos']
+    def forward(self, model_wrapper, input_data):
+        student_model = model_wrapper.model
+        projectors = model_wrapper.projectors        
+
+        student_qry_input = input_data['qry']
+        student_pos_input = input_data['pos']
+
+        caching_dir = self.args.caching_dir
         
         batch_size = student_qry_input['input_ids'].size(0)
 
-
-        teacher_model.eval()
-        teacher_qry_output = teacher_model.encode_input(teacher_qry_input)
-        teacher_pos_output = teacher_model.encode_input(teacher_pos_input)
-        teacher_qry_reps, teacher_qry_image_features, teacher_qry_attention, teacher_qry_hidden_states = teacher_qry_output
-        teacher_pos_reps, teacher_pos_image_features, teacher_pos_attention, teacher_pos_hidden_states = teacher_pos_output
-        
         student_qry_output = student_model.encode_input(student_qry_input)
         student_pos_output = student_model.encode_input(student_pos_input)
         student_qry_reps, student_qry_image_features, student_qry_attention, student_qry_hidden_states = student_qry_output
         student_pos_reps, student_pos_image_features, student_pos_attention, student_pos_hidden_states = student_pos_output
+
+        device = student_qry_reps.device
+
+        teacher_qry_reps, teacher_pos_reps = self.get_teacher_representations(caching_dir, input_data)
+
+        teacher_qry_reps = teacher_qry_reps.to(device)
+        teacher_pos_reps = teacher_pos_reps.to(device)
         
         if self.world_size > 1:
             all_student_qry_reps = self._dist_gather_tensor(student_qry_reps)
             all_student_pos_reps = self._dist_gather_tensor(student_pos_reps)
-            all_teacher_qry_reps = self._dist_gather_tensor(teacher_qry_reps)
-            all_teacher_pos_reps = self._dist_gather_tensor(teacher_pos_reps)
+            # all_teacher_qry_reps = self._dist_gather_tensor(teacher_qry_reps)
+            # all_teacher_pos_reps = self._dist_gather_tensor(teacher_pos_reps)
         else:
             all_student_qry_reps = student_qry_reps
             all_student_pos_reps = student_pos_reps
-            all_teacher_qry_reps = teacher_qry_reps
-            all_teacher_pos_reps = teacher_pos_reps
+            # all_teacher_qry_reps = teacher_qry_reps
+            # all_teacher_pos_reps = teacher_pos_reps
             
         scores = student_model.compute_similarity(all_student_qry_reps, all_student_pos_reps)
         scores = scores.view(all_student_qry_reps.size(0), -1)
         target = torch.arange(scores.size(0), device=scores.device, dtype=torch.long)
         target = target * (all_student_qry_reps.size(0) // all_student_pos_reps.size(0))
-        contrastive_loss = nn.CrossEntropyLoss()(scores / self.distiller.temperature, target)
+        contrastive_loss = nn.CrossEntropyLoss()(scores / model_wrapper.temperature, target)
 
-        # student_special_ids = torch.tensor(
-        #     list(
-        #         set(
-        #             list(student_tokenizer.added_tokens_encoder.values()) +
-        #             student_tokenizer.all_special_ids
-        #         )
-        #     ),
-        #     device=student_qry_input['input_ids'].device,
-        #     dtype=torch.long
-        # )
-
-        # teacher_special_ids = torch.tensor(
-        #     list(
-        #         set(
-        #             list(teacher_tokenizer.added_tokens_encoder.values()) +
-        #             teacher_tokenizer.all_special_ids
-        #         )
-        #     ),
-        #     device=teacher_qry_input['input_ids'].device,
-        #     dtype=torch.long
-        # )
-
-        # num_student_text_qry_tokens = count_clean_text_tokens(student_qry_input, student_special_ids)
-        # num_student_text_pos_tokens = count_clean_text_tokens(student_pos_input, student_special_ids)
-
-        # num_teacher_text_qry_tokens = count_clean_text_tokens(teacher_qry_input, teacher_special_ids)
-        # num_teacher_text_pos_tokens = count_clean_text_tokens(teacher_pos_input, teacher_special_ids)
-        
         num_stu_layer = len(student_qry_hidden_states)
         tamd = 0.0
 

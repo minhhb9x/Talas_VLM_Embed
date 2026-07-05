@@ -73,6 +73,20 @@ def process_image(image, resolution, max_dim=1344):
 
     return image
 
+def create_semi_orthogonal_matrix(tensor):
+    rows, cols = tensor.shape
+    if rows >= cols:
+        # QR trực tiếp
+        a = torch.randn(rows, cols, dtype=tensor.dtype)
+        q, _ = torch.linalg.qr(a, mode='reduced')
+        tensor.data[:] = q[:, :cols]
+    else:
+        # QR trên ma trận transpose để đảm bảo W W^T = I
+        a = torch.randn(cols, rows, dtype=tensor.dtype)
+        q, _ = torch.linalg.qr(a, mode='reduced')
+        tensor.data[:] = q.T[:rows, :]
+    return tensor
+
 class SingleWrapper(nn.Module):
     def __init__(self, model_args, training_args):
         super(SingleWrapper, self).__init__()
@@ -80,6 +94,9 @@ class SingleWrapper(nn.Module):
         self.training_args = training_args
         self.model = self._load_model() # MMEBModel
         self.temperature = model_args.temperature
+        self.student_hidden_dim = self.model_args.student_hidden_dim
+        self.teacher_hidden_dim = self.model_args.teacher_hidden_dim
+        self.set_projector()
     
     def _load_model(self):
         print("Load single model with lora rank:", self.model_args.lora_r)
@@ -95,6 +112,91 @@ class SingleWrapper(nn.Module):
         setattr(self, 'processor', processor)
         print("Processor loaded.")
         return processor
+
+    def set_projector(self):
+        """
+        Create a list of linear projectors mapping
+        student_hidden_dim -> teacher_hidden_dim
+        One projector per teacher layer mapping.
+        """
+        projector_list = nn.ModuleList()
+        
+        if self.model_args.projector_config_path is not None:
+            self.projectors = nn.ModuleDict()
+            projector_config = json.load(open(self.model_args.projector_config_path, 'r'))
+            
+            name_dict = {
+                "s": self.student_hidden_dim,
+                "t": self.teacher_hidden_dim,
+                "relu": nn.ReLU()
+            }
+            
+            for name, cfg in projector_config.items():
+                if not cfg.get("enabled", False):
+                    continue
+                seq = nn.Sequential()
+                parts = cfg["structure"].split("-")
+                parsed = []
+                
+                for p in parts:
+                    if p == "relu":
+                        parsed.append("relu")
+                    else:
+                        coef = int(p[:-1]) if len(p) > 1 and p[:-1].isdigit() else 1
+                        parsed.append(coef * name_dict[p[-1]])
+                for i in range(len(parsed) -1):
+                    a, b = parsed[i], parsed[i+1]
+                    if isinstance(a, int) and isinstance(b, int):
+                        layer = nn.Linear(a, b)
+                        create_semi_orthogonal_matrix(layer.weight)
+                        layer = layer.to(dtype=torch.bfloat16)
+                        seq.append(layer)
+                    elif b == "relu":
+                        seq.append(name_dict[b])
+                    elif a =="relu" and isinstance(b, int):
+                        prev_out = parsed[i-1] if isinstance(parsed[i-1], int) else None
+                        layer = nn.Linear(prev_out, b)
+                        create_semi_orthogonal_matrix(layer.weight)
+                        layer = layer.to(dtype=torch.bfloat16)
+                        seq.append(layer)
+                self.projectors[name] = seq
+        elif self.training_args.teacher_layer_mapping:
+            for _ in range(len(self.training_args.teacher_layer_mapping)):
+                projector = nn.Linear(
+                    self.student_hidden_dim,
+                    self.teacher_hidden_dim,
+                    dtype=torch.bfloat16
+                )
+                projector_list.append(projector)
+
+            self.projectors = projector_list
+        elif self.training_args.num_projectors > 0:
+            for _ in range(self.training_args.num_projectors):
+                projector = nn.Linear(
+                    self.student_hidden_dim,
+                    self.teacher_hidden_dim,
+                    dtype=torch.bfloat16
+                )
+                projector_list.append(projector)
+
+            self.projectors = nn.ModuleList(projector_list)
+        else:
+            self.projectors = None
+            print("No projectors created.")
+
+        if self.projectors:
+            print(f"Created {len(self.projectors)} linear projectors.")
+    
+    def add_optimizer_param_group(self, optimizer):
+        if hasattr(self, 'projectors') and self.projectors is not None:
+            lr = getattr(self.training_args, "projector_lr", None) or self.training_args.learning_rate
+            optimizer.add_param_group({
+                "params": self.projectors.parameters(),
+                "lr": lr
+            })
+            print("-----------Projector parameters added to optimizer.----------")
+        
+        return optimizer
     
     def forward(self, criterion, batch):
         loss = criterion(self, batch)

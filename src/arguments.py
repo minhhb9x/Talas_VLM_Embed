@@ -106,6 +106,7 @@ class TrainingArguments(TrainingArguments):
     ds_config: str = field(default=None, metadata={"help": "DeepSpeed config json file path"})
     deepspeed_config: str = field(default=None, metadata={"help": "DeepSpeed config json file path"})
     # args for TALAS
+    caching_dir: str = field(default=None, metadata={"help": "caching directory for TALAS"})
     num_projectors: int = field(default=0, metadata={"help": "Number of projectors for distillation"})
     num_self_kd_layers: int = field(default=0, metadata={"help": "Number of self-kd layers for distillation"})
     # new args for span loss

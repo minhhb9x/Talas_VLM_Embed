@@ -354,8 +354,8 @@ def main():
     )
     print(f"Len of train dataset: {len(train_dataloader.dataset)}")
     total_steps = (len(train_dataloader.dataset) // (training_args.per_device_train_batch_size * dist.get_world_size()) // training_args.gradient_accumulation_steps) * training_args.num_train_epochs
-    # if model_args.projector_config_path is not None:
-    #     optimizer = distiller.add_optimizer_param_group(optimizer)
+
+    optimizer = model_wrapper.add_optimizer_param_group(optimizer)
 
     print("Number of trainable parameters:", sum(p.numel() for p in optimizer.param_groups[0]['params'] if p.requires_grad))
 

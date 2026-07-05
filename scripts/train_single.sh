@@ -43,8 +43,8 @@ torchrun --nproc_per_node=$NUM_GPUS_PER_NODE \
     --seed 42 \
     --weight_decay 0.01 \
     --normalize True \
-    --lr_scheduler_type "cosine" \
-    --warmup_ratio 0.03 \
+    --lr_scheduler_type "constant" \
+    --warmup_ratio 0.05 \
     --kd_loss_type "contrastive" \
     --image_resolution "low" \
     --report_to "none" 

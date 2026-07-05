@@ -247,7 +247,7 @@ class Distiller(nn.Module):
                 "params": self.projectors.parameters(),
                 "lr": lr
             })
-        print("-----------Projector parameters added to optimizer.----------")
+            print("-----------Projector parameters added to optimizer.----------")
 
         if self.model_args.modality_gated_pooling:
             optimizer.add_param_group({
