@@ -25,7 +25,7 @@ torchrun --nproc_per_node=$NUM_GPUS_PER_NODE \
     --lora True \
     --lora_r 8 \
     --lora_alpha 64 \
-    --model_backbone "llava_qwen2" \
+    --model_backbone "qwen2_vl" \
     --pooling "eos" \
     --dataset_name "TIGER-Lab/MMEB-train" \
     --subset_name "${SUBSETS[@]}" \
