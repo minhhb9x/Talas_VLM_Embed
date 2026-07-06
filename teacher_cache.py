@@ -1,3 +1,4 @@
+import gc
 import os
 import random
 import sys
@@ -85,6 +86,12 @@ def first_tensor(output):
     raise TypeError(f"Unsupported teacher output type: {type(output)}")
 
 
+def release_memory(device):
+    gc.collect()
+    if torch.cuda.is_available() and torch.device(device).type == "cuda":
+        torch.cuda.empty_cache()
+
+
 def prepare_dataset(data_args, model_args):
     return SingleDataset(data_args, model_args)
 
@@ -134,10 +141,14 @@ class TeacherCacheRunner:
                 output_pos_dir = os.path.join(self.training_args.output_dir, encoded_dir, "pos.pt")
                 os.makedirs(os.path.dirname(output_qry_dir), exist_ok=True)
                 os.makedirs(os.path.dirname(output_pos_dir), exist_ok=True)
-                torch.save(qry_rep, output_qry_dir)
-                torch.save(pos_rep, output_pos_dir)
+                torch.save(qry_rep.clone(), output_qry_dir)
+                torch.save(pos_rep.clone(), output_pos_dir)
 
             progress_bar.update(1)
+            del qry_reps
+            del pos_reps
+            del batch
+            release_memory(self.device)
 
         progress_bar.close()
         return
