@@ -338,8 +338,10 @@ def main():
     )
     num_trainable_vision = 0
     for n, p in model_wrapper.model.named_parameters():
-        if "mm_projector" in n:
+        if "mm_projector" in n or "multi_modal_projector" in n:
             p.requires_grad = True
+        if "lm_head" in n:
+            p.requires_grad = False
         if p.requires_grad:
             p.data = p.data.to(torch.bfloat16)
             num_trainable_vision += p.numel()
