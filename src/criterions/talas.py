@@ -52,14 +52,67 @@ class Talas(nn.Module):
 
         return teacher_qry_reps, teacher_pos_reps
 
+    def relation_matrix(
+        self,
+        x: torch.Tensor,
+        y: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """
+        Intra-modal: relation_matrix(x)    -> X X^T
+        Inter-modal: relation_matrix(x, y) -> X Y^T
+        """
+        x = F.normalize(x, dim=-1)
+
+        if y is None:
+            y = x
+        else:
+            y = F.normalize(y, dim=-1)
+
+        return x @ y.T
+
+
+    def relation_kd_loss(
+        self,
+        student_x: torch.Tensor,
+        teacher_x: torch.Tensor,
+        student_y: torch.Tensor | None = None,
+        teacher_y: torch.Tensor | None = None,
+        remove_diagonal: bool = False,
+    ) -> torch.Tensor:
+        """
+        Intra-modal:
+            relation_kd_loss(student_q, teacher_q)
+            relation_kd_loss(student_t, teacher_t)
+
+        Inter-modal:
+            relation_kd_loss(
+                student_q, teacher_q,
+                student_t, teacher_t,
+            )
+        """
+        student_rel = self.relation_matrix(student_x, student_y)
+
+        teacher_rel = self.relation_matrix(teacher_x, teacher_y)
+
+        if remove_diagonal:
+            batch_size = student_rel.size(0)
+            mask = ~torch.eye(
+                batch_size,
+                dtype=torch.bool,
+                device=student_rel.device,
+            )
+
+            student_rel = student_rel[mask]
+            teacher_rel = teacher_rel[mask]
+
+        return F.smooth_l1_loss(student_rel, teacher_rel)
+
     def forward(self, model_wrapper, input_data):
         student_model = model_wrapper.model
         projectors = model_wrapper.projectors        
 
         student_qry_input = input_data['qry']
         student_pos_input = input_data['pos']
-
-        caching_dir = self.args.caching_dir
         
         batch_size = student_qry_input['input_ids'].size(0)
 
@@ -70,7 +123,7 @@ class Talas(nn.Module):
 
         device = student_qry_reps.device
 
-        teacher_qry_reps, teacher_pos_reps = self.get_teacher_representations(caching_dir, input_data)
+        teacher_qry_reps, teacher_pos_reps = input_data["teacher_qry_rep"], input_data["teacher_pos_rep"]
 
         teacher_qry_reps = teacher_qry_reps.to(device)
         teacher_pos_reps = teacher_pos_reps.to(device)
@@ -78,13 +131,13 @@ class Talas(nn.Module):
         if self.world_size > 1:
             all_student_qry_reps = self._dist_gather_tensor(student_qry_reps)
             all_student_pos_reps = self._dist_gather_tensor(student_pos_reps)
-            # all_teacher_qry_reps = self._dist_gather_tensor(teacher_qry_reps)
-            # all_teacher_pos_reps = self._dist_gather_tensor(teacher_pos_reps)
+            all_teacher_qry_reps = self._dist_gather_tensor(teacher_qry_reps)
+            all_teacher_pos_reps = self._dist_gather_tensor(teacher_pos_reps)
         else:
             all_student_qry_reps = student_qry_reps
             all_student_pos_reps = student_pos_reps
-            # all_teacher_qry_reps = teacher_qry_reps
-            # all_teacher_pos_reps = teacher_pos_reps
+            all_teacher_qry_reps = teacher_qry_reps
+            all_teacher_pos_reps = teacher_pos_reps
             
         scores = student_model.compute_similarity(all_student_qry_reps, all_student_pos_reps)
         scores = scores.view(all_student_qry_reps.size(0), -1)
@@ -95,24 +148,45 @@ class Talas(nn.Module):
         num_stu_layer = len(student_qry_hidden_states)
         tamd = 0.0
 
-        for proj_idx, i in enumerate(range(num_stu_layer - self.args.num_projectors, 
-                       num_stu_layer)):
+        # for proj_idx, i in enumerate(range(num_stu_layer - self.args.num_projectors, 
+        #                num_stu_layer)):
 
-            last_stu_qry_hidden_state = pooling(student_qry_hidden_states[i], 
-                                                student_qry_input['attention_mask'], 
-                                                mode='eos',
-                                                normalize=False)
-            student_qry_proj = projectors[proj_idx](last_stu_qry_hidden_state)
-            tamd += self.cosine_loss(student_qry_proj, teacher_qry_reps)
+        #     last_stu_qry_hidden_state = pooling(student_qry_hidden_states[i], 
+        #                                         student_qry_input['attention_mask'], 
+        #                                         mode='eos',
+        #                                         normalize=False)
+        #     student_qry_proj = projectors[proj_idx](last_stu_qry_hidden_state)
+        #     tamd += self.cosine_loss(student_qry_proj, teacher_qry_reps)
 
-            last_stu_pos_hidden_state = pooling(student_pos_hidden_states[i], 
-                                                student_pos_input['attention_mask'], 
-                                                mode='eos',
-                                                normalize=False)
-            student_pos_proj = projectors[proj_idx](last_stu_pos_hidden_state)
-            tamd += self.cosine_loss(student_pos_proj, teacher_pos_reps)
-        
-        tamd /= (2 * self.args.num_projectors)
+        #     last_stu_pos_hidden_state = pooling(student_pos_hidden_states[i], 
+        #                                         student_pos_input['attention_mask'], 
+        #                                         mode='eos',
+        #                                         normalize=False)
+        #     student_pos_proj = projectors[proj_idx](last_stu_pos_hidden_state)
+        #     tamd += self.cosine_loss(student_pos_proj, teacher_pos_reps)
+
+        # tamd /= (2 * self.args.num_projectors)
+
+        qq_loss = self.relation_kd_loss(
+            all_student_qry_reps,
+            all_teacher_qry_reps,
+            remove_diagonal=True,
+        )
+
+        tt_loss = self.relation_kd_loss(
+            all_student_pos_reps,
+            all_teacher_pos_reps,
+            remove_diagonal=True,
+        )
+
+        qt_loss = self.relation_kd_loss(
+            all_student_qry_reps,
+            all_teacher_qry_reps,
+            all_student_pos_reps,
+            all_teacher_pos_reps,
+        )
+
+        tamd = (qq_loss + tt_loss + qt_loss) / 3.0
 
         lasd = 0.0
         for i in range(num_stu_layer - 1 - self.args.num_self_kd_layers,
@@ -150,4 +224,3 @@ class Talas(nn.Module):
             'contrastive_loss': contrastive_loss,
             'kd_loss': loss_distill
         }
-        

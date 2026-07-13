@@ -259,11 +259,17 @@ class SingleCollator:
                                                           )
         
         # get encoded_dir from examples
-        encoded_dirs = [example["encoded_dir"] for example in examples]
+        if self.data_args.caching_dir:
+            tea_qry_reps = torch.stack([ex["teacher_qry_rep"] for ex in examples])
+            tea_pos_reps = torch.stack([ex["teacher_pos_rep"] for ex in examples])
+        else:
+            tea_qry_reps, tea_pos_reps = None, None
+
         return {
             'qry': processed_qry_inputs,
             'pos': processed_pos_inputs,
-            'encoded_dir': encoded_dirs
+            "teacher_qry_rep": tea_qry_reps,
+            "teacher_pos_rep": tea_pos_reps,
         }
 
 class SingleDataset(Dataset):
@@ -322,7 +328,13 @@ class SingleDataset(Dataset):
             return process_image(image, self.data_args.image_resolution)
         else:
             return image
-        
+    
+    def _get_cache(self, data_idx, name="qry.pt"):
+        if not self.data_args.caching_dir:
+            return None
+        rep = torch.load(os.path.join(self.data_args.caching_dir, self.train_data[data_idx]["encoded_dir"], name))
+        return rep
+
     def __getitem__(self, data_idx):
         # print(f">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>get image called, {data_idx}", flush=True)
         
@@ -368,10 +380,14 @@ class SingleDataset(Dataset):
             final_pos_texts.append(curr_pos_text)
             final_pos_images.append(curr_pos_image)
 
+        tea_qry_rep = self._get_cache(data_idx, name="qry.pt")
+        tea_pos_rep = self._get_cache(data_idx, name="pos.pt")
+
         return {
             "query_text": final_qry_texts,
             "query_image": final_qry_images,
             "pos_text": final_pos_texts,
             "pos_image": final_pos_images,
-            "encoded_dir": self.train_data[data_idx]["encoded_dir"]
+            "teacher_qry_rep": tea_qry_rep,
+            "teacher_pos_rep": tea_pos_rep,
         }
