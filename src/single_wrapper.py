@@ -270,6 +270,7 @@ class SingleCollator:
             'pos': processed_pos_inputs,
             "teacher_qry_rep": tea_qry_reps,
             "teacher_pos_rep": tea_pos_reps,
+            "encoded_dir": [ex["encoded_dir"] for ex in examples]
         }
 
 class SingleDataset(Dataset):
@@ -390,4 +391,5 @@ class SingleDataset(Dataset):
             "pos_image": final_pos_images,
             "teacher_qry_rep": tea_qry_rep,
             "teacher_pos_rep": tea_pos_rep,
+            "encoded_dir": self.train_data[data_idx]["encoded_dir"]
         }
