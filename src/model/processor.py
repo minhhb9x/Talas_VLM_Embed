@@ -464,6 +464,12 @@ def Phi3V_process_fn(model_inputs: dict, processor, max_length=None):
 
 def FastVLM_process_fn(model_inputs: dict, processor: FastVLMProcessor | FastVLMProcessor2 , max_length=None, square_padding=False):
     texts, visual_inputs = model_inputs['text'], model_inputs['images']
+    eos_token = getattr(processor.tokenizer, "eos_token", None)
+    if eos_token:
+        texts = [
+            text if text.rstrip().endswith(eos_token) else text + eos_token
+            for text in texts
+        ]
     inputs = processor(
         images=visual_inputs,
         texts=texts,

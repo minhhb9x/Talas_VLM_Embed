@@ -116,7 +116,7 @@ class Trainer:
         self.training_args = training_args
         self.data_args = data_args
         
-        self.model_wrapper = DDP(self.model_wrapper, device_ids=[self.gpu_id])
+        self.model_wrapper = DDP(self.model_wrapper, device_ids=[self.gpu_id], find_unused_parameters=True)
 
         # <--- [THÊM] Logic kiểm tra report_to="wandb"
         self.use_wandb = False
@@ -313,7 +313,7 @@ def main():
     training_args: TrainingArguments
     
     rank = dist.get_rank()
-    seed_everything(training_args.seed, rank=rank) 
+    # seed_everything(training_args.seed, rank=rank) 
     
     model_wrapper = SingleWrapper(model_args, training_args)
     train_dataset = prepare_dataset(data_args, model_args)

@@ -5,11 +5,11 @@ SUBSETS=(
 )
 
 # MODEL=training/FastVLM-0.5B_cls_0.3_talas/checkpoint-final
-MODEL=training/FastVLM-0.5B_base/checkpoint-final
-
+MODEL=training/FastVLM-0.5B_base_16/checkpoint-final
+export CUDA_VISIBLE_DEVICES=1
 python eval_mmeb.py \
     --model_name $MODEL \
-    --encode_output_path ./MMEB-eval_outputs/FastVLM-0.5B_base/ \
+    --encode_output_path ./MMEB-eval_outputs/FastVLM-0.5B_base_16/ \
     --lora True --lora_r 64 --lora_alpha 64 \
     --pooling eos \
     --model_backbone llava_qwen2 \
@@ -18,7 +18,7 @@ python eval_mmeb.py \
     --dataset_name TIGER-Lab/MMEB-eval \
     --subset_name "${SUBSETS[@]}" \
     --dataset_split test \
-    --per_device_eval_batch_size 16 \
+    --per_device_eval_batch_size 32 \
     --image_dir eval_images/ \
     --tgt_prefix_mod \
     --load_pretrained_lora True \

@@ -2,7 +2,7 @@
 
 # Số lượng GPU trên mỗi node (máy)
 NUM_GPUS_PER_NODE=1
-
+export CUDA_VISIBLE_DEVICES=1
 # Đường dẫn tới file script training của bạn
 TRAIN_SCRIPT="train_ddp.py"
 
@@ -31,8 +31,8 @@ torchrun --nproc_per_node=$NUM_GPUS_PER_NODE \
     --subset_name "${SUBSETS[@]}" \
     --dataset_split "original" \
     --image_dir "vlm2vec_train/MMEB-train" \
-    --output_dir "training/FastVLM-0.5B_base" \
-    --per_device_train_batch_size 8 \
+    --output_dir "training/FastVLM-0.5B_base_16_eos" \
+    --per_device_train_batch_size 16 \
     --gradient_accumulation_steps 1 \
     --learning_rate 1e-4 \
     --num_train_epochs 1 \
