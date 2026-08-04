@@ -5,11 +5,11 @@ SUBSETS=(
 )
 
 # MODEL=training/FastVLM-0.5B_cls_0.3_talas/checkpoint-final
-MODEL=training/FastVLM-0.5B_base_16/checkpoint-final
+MODEL=training/FastVLM-0.5B_talas_1.0_eos_norm_proj_cls/checkpoint-epoch-0
 export CUDA_VISIBLE_DEVICES=1
 python eval_mmeb.py \
     --model_name $MODEL \
-    --encode_output_path ./MMEB-eval_outputs/FastVLM-0.5B_base_16/ \
+    --encode_output_path ./MMEB-eval_outputs/FastVLM-0.5B_talas_1.0_eos_norm_proj_cls/ \
     --lora True --lora_r 64 --lora_alpha 64 \
     --pooling eos \
     --model_backbone llava_qwen2 \

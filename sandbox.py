@@ -122,7 +122,7 @@ def compute_effective_rank(
     eigvals = s * s
     prob = eigvals.clamp(min=eps) / eigvals.sum()
     entropy = -(prob * torch.log(prob)).sum()
-    return torch.exp(entropy) / n
+    return torch.exp(entropy) 
 
 
 def effective_ranks_by_model(

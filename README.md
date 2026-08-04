@@ -15,7 +15,9 @@ pip install -r requirements.txt
 1. Download the eval image file zip from huggingface (`optional`) 
 ```bash
 cd VLM_Embed
-wget https://huggingface.co/datasets/TIGER-Lab/MMEB-eval/resolve/main/images.zip
+hf download TIGER-Lab/MMEB-eval images.zip \
+  --repo-type dataset \
+  --local-dir .
 unzip images.zip -d eval_images/
 ```
 2. Download train image, it can take > 1 hour to download

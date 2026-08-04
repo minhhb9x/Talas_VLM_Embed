@@ -230,6 +230,8 @@ class Distiller(nn.Module):
                     self.teacher_hidden_dim,
                     dtype=torch.bfloat16
                 )
+                with torch.no_grad():
+                    projector.weight.normal_(mean=0.0, std=1e-3)
                 projector_list.append(projector)
 
             self.projectors = nn.ModuleList(projector_list)
