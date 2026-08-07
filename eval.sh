@@ -1,7 +1,7 @@
 SUBSETS=(
   "ImageNet-1K" "N24News" "HatefulMemes" "VOC2007" "SUN397"
     # "ImageNet-1K"
-#   "OK-VQA" "A-OKVQA" "DocVQA" "InfographicsVQA" "ChartQA"
+#   "OK-VQA" "A-OKVQA" "DocVQA" "InfographicsVQA" "ChartQA" "Visual7W"
 )
 
 # MODEL=training/FastVLM-0.5B_cls_0.3_talas/checkpoint-final

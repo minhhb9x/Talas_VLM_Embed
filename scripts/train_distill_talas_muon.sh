@@ -1,14 +1,8 @@
 #!/bin/bash
 
-# Số lượng GPU trên mỗi node (máy)
 NUM_GPUS_PER_NODE=1
+TRAIN_SCRIPT="train_ddp_muon.py"
 
-# Đường dẫn tới file script training của bạn
-TRAIN_SCRIPT="train_ddp.py"
-
-# =========================================================================
-# Dùng torchrun để khởi chạy
-# =========================================================================
 torchrun --standalone \
     --nproc_per_node=$NUM_GPUS_PER_NODE $TRAIN_SCRIPT \
     --model_name apple/FastVLM-0.5B \
@@ -27,10 +21,12 @@ torchrun --standalone \
     --dataset_split "original" \
     --image_dir "vlm2vec_train/MMEB-train" \
     --percent_data 1.0 \
-    --output_dir "training/FastVLM-0.5B_talas_1.0_eos_cls" \
+    --output_dir "training/FastVLM-0.5B_talas_1.0_eos_cls_muon" \
     --per_device_train_batch_size 16 \
     --gradient_accumulation_steps 1 \
     --learning_rate 1e-4 \
+    --muon_lr 1e-3 \
+    --muon_weight_decay 0.01 \
     --num_train_epochs 1 \
     --bf16 \
     --save_total_limit 5 \

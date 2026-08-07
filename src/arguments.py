@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from transformers import TrainingArguments
-from typing import List
+from typing import List, Optional
 
 
 @dataclass
@@ -106,6 +106,8 @@ class TrainingArguments(TrainingArguments):
     kd_loss_type: str = field(default="contrastive_rkd", metadata={"help": "type of kd loss, current only support RKD"})
     ds_config: str = field(default=None, metadata={"help": "DeepSpeed config json file path"})
     deepspeed_config: str = field(default=None, metadata={"help": "DeepSpeed config json file path"})
+    muon_lr: Optional[float] = field(default=None, metadata={"help": "Learning rate for Muon parameter groups. If None, uses torch.optim.Muon default."})
+    muon_weight_decay: Optional[float] = field(default=None, metadata={"help": "Weight decay for Muon parameter groups. If None, uses torch.optim.Muon default."})
     # args for TALAS
     num_projectors: int = field(default=0, metadata={"help": "Number of projectors for distillation"})
     num_self_kd_layers: int = field(default=0, metadata={"help": "Number of self-kd layers for distillation"})
