@@ -21,6 +21,7 @@ from .compute_effective_rank import EffectiveRankLoss
 from .contrastive_pooling_loss import ContrastivePoolingLoss
 from .grad_aggregation import GradPoolingLoss
 from .talas import Talas
+from .similarity_matrix_distillation import SimilarityMatrixDistillationLoss
 
 criterion_list = {
     "contrastive": ContrastiveLoss,
@@ -47,6 +48,7 @@ criterion_list = {
     "contrastive_pooling_loss": ContrastivePoolingLoss,
     "grad_pooling": GradPoolingLoss,
     "talas": Talas,
+    "similarity_matrix_distillation": SimilarityMatrixDistillationLoss,
 }
 
 def build_criterion(args):

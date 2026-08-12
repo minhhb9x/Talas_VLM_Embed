@@ -70,83 +70,45 @@ class Talas(nn.Module):
 
         return x @ y.T
 
+    def relative_qp_self_kd(
+        self,
+        stu_q_i,
+        stu_p_i,
+        stu_q_i1,
+        stu_p_i1,
+        margin=0.015,
+    ):
+        q_low = F.normalize(stu_q_i, dim=-1)
+        p_low = F.normalize(stu_p_i, dim=-1)
 
-    # def relation_kd_loss(
-    #     self,
-    #     student_x: torch.Tensor,
-    #     teacher_x: torch.Tensor,
-    #     student_y: torch.Tensor | None = None,
-    #     teacher_y: torch.Tensor | None = None,
-    #     remove_diagonal: bool = False,
-    #     temperature: float = 0.02,
-    # ) -> torch.Tensor:
-    #     if temperature <= 0:
-    #         raise ValueError(f"temperature must be positive, got {temperature}")
+        with torch.no_grad():
+            q_high = F.normalize(stu_q_i1, dim=-1)
+            p_high = F.normalize(stu_p_i1, dim=-1)
 
-    #     student_logits = self.relation_matrix(
-    #         student_x.float(),
-    #         student_y.float() if student_y is not None else None,
-    #     )
-    #     teacher_logits = self.relation_matrix(
-    #         teacher_x.float(),
-    #         teacher_y.float() if teacher_y is not None else None,
-    #     )
+        # [B, B]
+        low_sim = q_low @ p_low.T
+        high_sim = q_high @ p_high.T
 
-    #     if student_logits.shape != teacher_logits.shape:
-    #         raise ValueError(
-    #             f"Shape mismatch: student={student_logits.shape}, "
-    #             f"teacher={teacher_logits.shape}"
-    #         )
+        low_score = low_sim.flatten()
+        high_score = high_sim.flatten()
 
-    #     diagonal_mask = None
-    #     if remove_diagonal:
-    #         if student_logits.size(-2) != student_logits.size(-1):
-    #             raise ValueError(
-    #                 "remove_diagonal=True requires a square relation matrix"
-    #             )
+        teacher_diff = (
+            high_score[:, None]
+            - high_score[None, :]
+        )
 
-    #         diagonal_mask = torch.eye(
-    #             student_logits.size(-1),
-    #             dtype=torch.bool,
-    #             device=student_logits.device,
-    #         )
+        valid = teacher_diff > 0
 
-    #         # Phải mask trước softmax để phần tử đường chéo
-    #         # không tham gia vào phân phối xác suất.
-    #         student_logits = student_logits.masked_fill(
-    #             diagonal_mask,
-    #             float("-inf"),
-    #         )
-    #         teacher_logits = teacher_logits.masked_fill(
-    #             diagonal_mask,
-    #             float("-inf"),
-    #         )
+        student_violation = (
+            low_score[None, :]
+            - low_score[:, None]
+            + margin
+        )
 
-    #     student_log_probs = F.log_softmax(
-    #         student_logits / temperature,
-    #         dim=-1,
-    #     )
+        if not valid.any():
+            return q_low.sum() * 0.0
 
-    #     with torch.no_grad():
-    #         teacher_probs = F.softmax(
-    #             teacher_logits / temperature,
-    #             dim=-1,
-    #         )
-
-    #     if diagonal_mask is not None:
-    #         # F.kl_div still evaluates masked entries. Avoid 0 * -inf on the
-    #         # diagonal, which otherwise produces NaN.
-    #         student_log_probs = student_log_probs.masked_fill(diagonal_mask, 0.0)
-    #         teacher_probs = teacher_probs.masked_fill(diagonal_mask, 0.0)
-
-    #     return (
-    #         F.kl_div(
-    #             student_log_probs,
-    #             teacher_probs,
-    #             reduction="batchmean",
-    #         )
-    #         * temperature**2
-    #     )
+        return F.relu(student_violation)[valid].mean()
 
     def forward(self, model_wrapper, input_data):
         student_model = model_wrapper.model
@@ -208,30 +170,6 @@ class Talas(nn.Module):
 
         tamd /= (2 * self.args.num_projectors)
 
-        # qq_loss = self.relation_kd_loss(
-        #     all_student_qry_reps,
-        #     all_teacher_qry_reps,
-        #     remove_diagonal=True,
-        #     temperature=model_wrapper.temperature
-        # )
-
-        # tt_loss = self.relation_kd_loss(
-        #     all_student_pos_reps,
-        #     all_teacher_pos_reps,
-        #     remove_diagonal=True,
-        #     temperature=model_wrapper.temperature
-        # )
-
-        # qt_loss = self.relation_kd_loss(
-        #     all_student_qry_reps,
-        #     all_teacher_qry_reps,
-        #     all_student_pos_reps,
-        #     all_teacher_pos_reps,
-        #     temperature=model_wrapper.temperature
-        # )
-
-        # tamd = (qq_loss + tt_loss + qt_loss) / 3.0
-
         lasd = 0.0
         for i in range(num_stu_layer - 1 - self.args.num_self_kd_layers,
                        num_stu_layer - 1):
@@ -257,7 +195,7 @@ class Talas(nn.Module):
                                                 normalize=False)
             lasd += self.structure_loss(last_stu_pos_hidden_state_i, last_stu_pos_hidden_state_i1)
 
-        lasd /= (2 * self.args.num_self_kd_layers)
+        # lasd /= (2 * self.args.num_self_kd_layers)
         
         loss_distill = tamd + lasd
 

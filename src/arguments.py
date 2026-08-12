@@ -108,6 +108,7 @@ class TrainingArguments(TrainingArguments):
     deepspeed_config: str = field(default=None, metadata={"help": "DeepSpeed config json file path"})
     muon_lr: Optional[float] = field(default=None, metadata={"help": "Learning rate for Muon parameter groups. If None, uses torch.optim.Muon default."})
     muon_weight_decay: Optional[float] = field(default=None, metadata={"help": "Weight decay for Muon parameter groups. If None, uses torch.optim.Muon default."})
+    adjust_lr_fn: Optional[str] = field(default="match_rms_adamw", metadata={"help": "Muon learning-rate adjustment function. Use original, match_rms_adamw, or None."})
     # args for TALAS
     num_projectors: int = field(default=0, metadata={"help": "Number of projectors for distillation"})
     num_self_kd_layers: int = field(default=0, metadata={"help": "Number of self-kd layers for distillation"})

@@ -10,6 +10,7 @@ import sys
 from tqdm import tqdm 
 import math
 # import wandb 
+import re
 
 import torch
 import torch.nn as nn 
@@ -29,12 +30,24 @@ import random
 import numpy as np
 
 
+ADAMW_LORA_LAYERS = {}
+# Example: ADAMW_LORA_LAYERS = {20, 21, 22, 23}
+
+
+def get_transformer_layer_idx(name):
+    match = re.search(r"(?:^|\.)(?:layers|blocks|h)\.(\d+)\.", name)
+    return int(match.group(1)) if match else None
+
+
 def should_use_muon(name, param):
-    if not param.requires_grad or param.ndim != 2:
+    if not (param.requires_grad and param.ndim == 2 and "lora" in name.lower()):
         return False
-    name = name.lower()
-    adam_keywords = ("embed", "embedding", "lm_head", "head", "norm", "ln")
-    return not any(keyword in name for keyword in adam_keywords)
+
+    if ADAMW_LORA_LAYERS is None:
+        return True
+
+    layer_idx = get_transformer_layer_idx(name)
+    return layer_idx not in ADAMW_LORA_LAYERS
 
 
 def is_adamw_projector(name):
@@ -210,6 +223,8 @@ def get_optimizer(model, training_args):
             muon_kwargs["lr"] = training_args.muon_lr
         if training_args.muon_weight_decay is not None:
             muon_kwargs["weight_decay"] = training_args.muon_weight_decay
+        if training_args.adjust_lr_fn is not None:
+            muon_kwargs["adjust_lr_fn"] = training_args.adjust_lr_fn
         muon_optimizer = torch.optim.Muon(
             sorted(muon_params, key=lambda p: p.numel(), reverse=True),
             **muon_kwargs,
@@ -221,8 +236,8 @@ def get_optimizer(model, training_args):
         raise ValueError("No trainable parameters found for optimizer")
 
     optimizer = CombinedOptimizer(optimizers, adamw_defaults=adamw_defaults)
-    print_rank(f"Muon params: {sum(p.numel() for p in muon_params):,}")
-    print_rank(f"AdamW fallback params: {sum(p.numel() for p in adamw_params):,}")
+    print_rank(f"Muon LoRA params: {sum(p.numel() for p in muon_params):,}")
+    print_rank(f"AdamW params: {sum(p.numel() for p in adamw_params):,}")
     print_rank(f"Projector AdamW params: {sum(p.numel() for p in projector_params):,}")
     return optimizer
 
