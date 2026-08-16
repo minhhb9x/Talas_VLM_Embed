@@ -41,12 +41,12 @@ def seed_everything(seed: int, rank: int = 0):
     torch.cuda.manual_seed_all(seed)
 
     # Nếu bạn muốn deterministic (chậm hơn, đôi khi lỗi với một số ops)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    # torch.backends.cudnn.deterministic = True
+    # torch.backends.cudnn.benchmark = False
 
     # Bắt buộc với một số ops CUDA mới (matmul, conv...)
-    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
-    torch.use_deterministic_algorithms(True)
+    # os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+    # torch.use_deterministic_algorithms(True)
 
 def seed_worker(worker_id):
     worker_seed = torch.initial_seed() % 2**32
@@ -313,7 +313,7 @@ def main():
     training_args: TrainingArguments
     
     rank = dist.get_rank()
-    # seed_everything(training_args.seed, rank=rank) 
+    seed_everything(training_args.seed, rank=rank) 
     
     model_wrapper = SingleWrapper(model_args, training_args)
     train_dataset = prepare_dataset(data_args, model_args)
