@@ -47,10 +47,16 @@ class Talas(nn.Module):
         encoded_dirs = input_data['encoded_dir'] # list
         encoded_dirs = [os.path.join(caching_dir, encoded_dir) for encoded_dir in encoded_dirs]
 
-        teacher_qry_reps = torch.stack([torch.load(os.path.join(encoded_dir, 'qry.pt')) for encoded_dir in encoded_dirs])
-        teacher_pos_reps = torch.stack([torch.load(os.path.join(encoded_dir, 'pos.pt')) for encoded_dir in encoded_dirs])
+        teacher_qry_reps = torch.stack([self.load_cache_rep(os.path.join(encoded_dir, 'qry.pt')) for encoded_dir in encoded_dirs])
+        teacher_pos_reps = torch.stack([self.load_cache_rep(os.path.join(encoded_dir, 'pos.pt')) for encoded_dir in encoded_dirs])
 
         return teacher_qry_reps, teacher_pos_reps
+
+    def load_cache_rep(self, path):
+        cache = torch.load(path, map_location="cpu")
+        if isinstance(cache, dict):
+            return cache["rep"]
+        return cache
 
     def relation_matrix(
         self,
@@ -126,7 +132,9 @@ class Talas(nn.Module):
 
         device = student_qry_reps.device
 
-        teacher_qry_reps, teacher_pos_reps = input_data["teacher_qry_rep"], input_data["teacher_pos_rep"]
+        teacher_qry_reps, teacher_pos_reps = input_data["teacher_qry_caches"], input_data["teacher_pos_caches"] # list of objects, each object is a tensor of shape [batch_size, hidden_dim]
+        teacher_qry_reps = torch.stack([rep['rep'] for rep in teacher_qry_reps], dim=0)
+        teacher_pos_reps = torch.stack([rep['rep'] for rep in teacher_pos_reps], dim=0)
 
         teacher_qry_reps = teacher_qry_reps.to(device)
         teacher_pos_reps = teacher_pos_reps.to(device)
@@ -159,41 +167,43 @@ class Talas(nn.Module):
                                                 mode='eos',
                                                 normalize=True)
             student_qry_proj = projectors[proj_idx](last_stu_qry_hidden_state)
-            tamd += self.cosine_loss(student_qry_proj, teacher_qry_reps)
+            # tamd += self.cosine_loss(student_qry_proj, teacher_qry_reps)
 
             last_stu_pos_hidden_state = pooling(student_pos_hidden_states[i], 
                                                 student_pos_input['attention_mask'], 
                                                 mode='eos',
                                                 normalize=True)
             student_pos_proj = projectors[proj_idx](last_stu_pos_hidden_state)
-            tamd += self.cosine_loss(student_pos_proj, teacher_pos_reps)
+            # tamd += self.cosine_loss(student_pos_proj, teacher_pos_reps)
+            
+            tamd += self.relative_qp_self_kd(student_qry_proj, student_pos_proj, teacher_qry_reps, teacher_pos_reps)
 
         tamd /= (2 * self.args.num_projectors)
 
         lasd = 0.0
-        for i in range(num_stu_layer - 1 - self.args.num_self_kd_layers,
-                       num_stu_layer - 1):
+        # for i in range(num_stu_layer - 1 - self.args.num_self_kd_layers,
+        #                num_stu_layer - 1):
             
-            last_stu_qry_hidden_state_i = pooling(student_qry_hidden_states[i],
-                                                student_qry_input['attention_mask'],
-                                                mode='eos',
-                                                normalize=False)
-            last_stu_qry_hidden_state_i1 = pooling(student_qry_hidden_states[i+1],
-                                                student_qry_input['attention_mask'],
-                                                mode='eos',
-                                                normalize=False)
-            lasd += self.structure_loss(last_stu_qry_hidden_state_i, last_stu_qry_hidden_state_i1)
+        #     last_stu_qry_hidden_state_i = pooling(student_qry_hidden_states[i],
+        #                                         student_qry_input['attention_mask'],
+        #                                         mode='eos',
+        #                                         normalize=False)
+        #     last_stu_qry_hidden_state_i1 = pooling(student_qry_hidden_states[i+1],
+        #                                         student_qry_input['attention_mask'],
+        #                                         mode='eos',
+        #                                         normalize=False)
+        #     lasd += self.structure_loss(last_stu_qry_hidden_state_i, last_stu_qry_hidden_state_i1)
 
 
-            last_stu_pos_hidden_state_i = pooling(student_pos_hidden_states[i],
-                                                student_pos_input['attention_mask'],
-                                                mode='eos',
-                                                normalize=False)
-            last_stu_pos_hidden_state_i1 = pooling(student_pos_hidden_states[i+1],
-                                                student_pos_input['attention_mask'],
-                                                mode='eos',
-                                                normalize=False)
-            lasd += self.structure_loss(last_stu_pos_hidden_state_i, last_stu_pos_hidden_state_i1)
+        #     last_stu_pos_hidden_state_i = pooling(student_pos_hidden_states[i],
+        #                                         student_pos_input['attention_mask'],
+        #                                         mode='eos',
+        #                                         normalize=False)
+        #     last_stu_pos_hidden_state_i1 = pooling(student_pos_hidden_states[i+1],
+        #                                         student_pos_input['attention_mask'],
+        #                                         mode='eos',
+        #                                         normalize=False)
+        #     lasd += self.structure_loss(last_stu_pos_hidden_state_i, last_stu_pos_hidden_state_i1)
 
         # lasd /= (2 * self.args.num_self_kd_layers)
         

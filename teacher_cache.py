@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.distributed as dist
+from torch.distributed.elastic.multiprocessing.errors import record
 from torch.utils.data import DataLoader, Sampler, SequentialSampler
 from tqdm import tqdm
 from transformers import HfArgumentParser
@@ -51,7 +52,14 @@ def get_local_rank():
 def ddp_setup():
     if "LOCAL_RANK" not in os.environ:
         return
-    torch.cuda.set_device(get_local_rank())
+    local_rank = get_local_rank()
+    device_count = torch.cuda.device_count()
+    if local_rank >= device_count:
+        raise RuntimeError(
+            f"LOCAL_RANK={local_rank} but only {device_count} CUDA device(s) are visible. "
+            "Lower --nproc_per_node or set CUDA_VISIBLE_DEVICES to expose more GPUs."
+        )
+    torch.cuda.set_device(local_rank)
     dist.init_process_group(backend="nccl")
 
 
@@ -76,24 +84,98 @@ def to_device(obj, device):
     return obj
 
 
-def first_tensor(output):
-    if isinstance(output, torch.Tensor):
-        return output
-    if isinstance(output, (tuple, list)):
-        return output[0]
-    if hasattr(output, "last_hidden_state"):
-        return output.last_hidden_state
-    raise TypeError(f"Unsupported teacher output type: {type(output)}")
-
-
 def release_memory(device):
     gc.collect()
-    if torch.cuda.is_available() and torch.device(device).type == "cuda":
-        torch.cuda.empty_cache()
+    if torch.cuda.is_available():
+        if device is not None and torch.device(device).type == "cuda":
+            with torch.cuda.device(device):
+                torch.cuda.empty_cache()
+                torch.cuda.ipc_collect() 
+        else:
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
 
 
 def prepare_dataset(data_args, model_args):
     return SingleDataset(data_args, model_args)
+
+
+def get_special_ids_for_text_count(tokenizer):
+    if tokenizer is None:
+        return set()
+
+    eos_ids = tokenizer.eos_token_id
+    eos_ids = [] if eos_ids is None else eos_ids if isinstance(eos_ids, list) else [eos_ids]
+    return set(getattr(tokenizer, "all_special_ids", [])) - set(eos_ids)
+
+
+def count_text_tokens(inputs, special_ids_tensor, idx):
+    input_ids = inputs.get("input_ids")
+    if input_ids is None:
+        return 0
+    valid_mask = input_ids.ge(0) & inputs["attention_mask"].bool()
+    if special_ids_tensor.numel() > 0:
+        valid_mask = valid_mask & ~torch.isin(input_ids, special_ids_tensor.to(input_ids.device))
+    return int(valid_mask[idx].sum().item())
+
+
+def count_image_tokens(image_features, idx):
+    if image_features is None or idx >= len(image_features) or image_features[idx] is None:
+        return 0
+    return int(image_features[idx].size(0))
+
+
+def get_clean_token_slice(attention_mask, hidden_len, num_text_tokens, num_image_tokens):
+    num_valid_tokens = num_text_tokens + num_image_tokens
+    if num_valid_tokens <= 0:
+        raise ValueError("No valid token found for hidden/attention inference.")
+    if num_valid_tokens > hidden_len:
+        raise ValueError(
+            f"num_valid_tokens={num_valid_tokens} exceeds hidden_len={hidden_len}. "
+            f"num_image_tokens={num_image_tokens}, num_text_tokens={num_text_tokens}."
+        )
+
+    left_padding = bool((attention_mask[0].eq(0) & attention_mask[-1].eq(1)).item())
+    if left_padding:
+        return slice(hidden_len - num_valid_tokens, hidden_len)
+    return slice(0, num_valid_tokens)
+
+
+def split_last_hidden_tokens(last_hidden_state, token_slice, num_image_tokens, num_text_tokens):
+    clean_hidden = last_hidden_state[token_slice, :]
+    image_hidden = clean_hidden[:num_image_tokens, :]
+    text_hidden = clean_hidden[num_image_tokens:num_image_tokens + num_text_tokens, :]
+    return image_hidden, text_hidden
+
+
+def mean_or_none(hidden_tokens):
+    if hidden_tokens.numel() == 0:
+        return None
+    return hidden_tokens.float().mean(dim=0).cpu()
+
+
+def build_cache_obj(rep, inputs, hidden_states, image_features, special_ids_tensor, idx):
+    num_image_tokens = count_image_tokens(image_features, idx)
+    num_text_tokens = count_text_tokens(inputs, special_ids_tensor, idx)
+    last_hidden_state = hidden_states[-1][idx]
+    token_slice = get_clean_token_slice(
+        inputs["attention_mask"][idx],
+        last_hidden_state.size(0),
+        num_text_tokens,
+        num_image_tokens,
+    )
+    image_hidden, text_hidden = split_last_hidden_tokens(
+        last_hidden_state,
+        token_slice,
+        num_image_tokens,
+        num_text_tokens,
+    )
+
+    return to_device({
+        "rep": rep[idx].float(),
+        "mean_last_img_token": mean_or_none(image_hidden),
+        "mean_last_text_token": mean_or_none(text_hidden),
+    }, 'cpu')
 
 
 class DistributedSequentialSampler(Sampler):
@@ -111,11 +193,12 @@ class DistributedSequentialSampler(Sampler):
 
 
 class TeacherCacheRunner:
-    def __init__(self, teacher, train_data, training_args):
+    def __init__(self, teacher, train_data, model_args, training_args):
         self.device = torch.device(f"cuda:{get_local_rank()}" if torch.cuda.is_available() else "cpu")
         self.teacher = teacher.to(self.device)
         self.teacher.eval()
         self.train_data = train_data
+        self.model_args = model_args
         self.training_args = training_args
 
     @torch.inference_mode()
@@ -126,27 +209,62 @@ class TeacherCacheRunner:
             disable=not is_main_process(),
         )
 
-        for batch_idx, batch in enumerate(self.train_data):
+        device = self.device
+        processor = load_processor(self.model_args, None)
+        special_ids = get_special_ids_for_text_count(processor.tokenizer)
+        special_ids_tensor = torch.tensor(sorted(special_ids), device=device, dtype=torch.long)
+
+        for batch in self.train_data:
             batch = to_device(batch, self.device)
 
-            qry_reps = first_tensor(self.teacher.encode_input(batch["qry"])).detach().cpu()
-            pos_reps = first_tensor(self.teacher.encode_input(batch["pos"])).detach().cpu()
+            with torch.no_grad():
+                qry_output = self.teacher.encode_input(batch["qry"])
+                pos_output = self.teacher.encode_input(batch["pos"])
+
+            qry_reps, qry_image_features, _, qry_hidden_states = qry_output
+            pos_reps, pos_image_features, _, pos_hidden_states = pos_output
 
             encoded_dirs = batch.get("encoded_dir")
             if encoded_dirs is None:
                 raise KeyError("Batch is missing encoded_dir. Make sure SingleDataset.__getitem__ and SingleCollator return it.")
+            if len(encoded_dirs) != qry_reps.size(0) or len(encoded_dirs) != pos_reps.size(0):
+                raise ValueError(
+                    f"encoded_dir count ({len(encoded_dirs)}) does not match encoded batch size "
+                    f"(qry={qry_reps.size(0)}, pos={pos_reps.size(0)})."
+                )
 
-            for i, (encoded_dir, qry_rep, pos_rep) in enumerate(zip(encoded_dirs, qry_reps, pos_reps)):
+            for i, encoded_dir in enumerate(encoded_dirs):
                 output_qry_dir = os.path.join(self.training_args.output_dir, encoded_dir, "qry.pt")
                 output_pos_dir = os.path.join(self.training_args.output_dir, encoded_dir, "pos.pt")
+
                 os.makedirs(os.path.dirname(output_qry_dir), exist_ok=True)
                 os.makedirs(os.path.dirname(output_pos_dir), exist_ok=True)
-                torch.save(qry_rep.clone(), output_qry_dir)
-                torch.save(pos_rep.clone(), output_pos_dir)
+
+                qry_obj = build_cache_obj(
+                    qry_reps,
+                    batch["qry"],
+                    qry_hidden_states,
+                    qry_image_features,
+                    special_ids_tensor,
+                    i,
+                )
+                pos_obj = build_cache_obj(
+                    pos_reps,
+                    batch["pos"],
+                    pos_hidden_states,
+                    pos_image_features,
+                    special_ids_tensor,
+                    i,
+                )
+
+                torch.save(qry_obj, output_qry_dir)
+                torch.save(pos_obj, output_pos_dir)
 
             progress_bar.update(1)
             del qry_reps
             del pos_reps
+            del qry_hidden_states
+            del pos_hidden_states
             del batch
             release_memory(self.device)
 
@@ -199,12 +317,15 @@ def main():
     seed_everything(training_args.seed, rank=get_rank())
 
     teacher = MMEBModel.load(model_args, is_trainable=False)
+    for n, p in teacher.named_parameters():
+        p.requires_grad = False
+        
     train_dataloader = build_dataloader(model_args, data_args, training_args)
 
     print_rank(f"Loaded {len(train_dataloader.dataset)} training samples")
     print_rank(f"Running teacher inference over {len(train_dataloader)} batches")
 
-    runner = TeacherCacheRunner(teacher, train_dataloader, training_args)
+    runner = TeacherCacheRunner(teacher, train_dataloader, model_args, training_args)
     os.makedirs(training_args.output_dir, exist_ok=True)
     runner.run_once()
 
@@ -213,9 +334,14 @@ def main():
         dist.barrier()
 
 
-if __name__ == "__main__":
+@record
+def entrypoint():
     ddp_setup()
     try:
         main()
     finally:
         cleanup_dist()
+
+
+if __name__ == "__main__":
+    entrypoint()

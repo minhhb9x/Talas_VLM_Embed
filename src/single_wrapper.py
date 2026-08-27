@@ -260,16 +260,16 @@ class SingleCollator:
         
         # get encoded_dir from examples
         if self.data_args.caching_dir:
-            tea_qry_reps = torch.stack([ex["teacher_qry_rep"] for ex in examples])
-            tea_pos_reps = torch.stack([ex["teacher_pos_rep"] for ex in examples])
+            teacher_qry_cache = [ex["teacher_qry_cache"] for ex in examples] # list of dicts
+            teacher_pos_cache = [ex["teacher_pos_cache"] for ex in examples] 
         else:
-            tea_qry_reps, tea_pos_reps = None, None
+            teacher_qry_cache, teacher_pos_cache = None, None
 
         return {
             'qry': processed_qry_inputs,
             'pos': processed_pos_inputs,
-            "teacher_qry_rep": tea_qry_reps,
-            "teacher_pos_rep": tea_pos_reps,
+            "teacher_qry_caches": teacher_qry_cache,
+            "teacher_pos_caches": teacher_pos_cache,
             "encoded_dir": [ex["encoded_dir"] for ex in examples]
         }
 
@@ -333,8 +333,14 @@ class SingleDataset(Dataset):
     def _get_cache(self, data_idx, name="qry.pt"):
         if not self.data_args.caching_dir:
             return None
-        rep = torch.load(os.path.join(self.data_args.caching_dir, self.train_data[data_idx]["encoded_dir"], name))
-        return rep
+        cache = torch.load(os.path.join(self.data_args.caching_dir, self.train_data[data_idx]["encoded_dir"], name), map_location="cpu")
+        if isinstance(cache, dict):
+            return cache
+        return {
+            "rep": cache,
+            "mean_last_img_token": None,
+            "mean_last_text_token": None,
+        }
 
     def __getitem__(self, data_idx):
         # print(f">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>get image called, {data_idx}", flush=True)
@@ -381,15 +387,15 @@ class SingleDataset(Dataset):
             final_pos_texts.append(curr_pos_text)
             final_pos_images.append(curr_pos_image)
 
-        tea_qry_rep = self._get_cache(data_idx, name="qry.pt")
-        tea_pos_rep = self._get_cache(data_idx, name="pos.pt")
+        tea_qry_cache = self._get_cache(data_idx, name="qry.pt")
+        tea_pos_cache = self._get_cache(data_idx, name="pos.pt")
 
         return {
             "query_text": final_qry_texts,
             "query_image": final_qry_images,
             "pos_text": final_pos_texts,
             "pos_image": final_pos_images,
-            "teacher_qry_rep": tea_qry_rep,
-            "teacher_pos_rep": tea_pos_rep,
+            "teacher_qry_cache": tea_qry_cache,
+            "teacher_pos_cache": tea_pos_cache,
             "encoded_dir": self.train_data[data_idx]["encoded_dir"]
         }
