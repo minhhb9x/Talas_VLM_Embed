@@ -437,8 +437,18 @@ def infer_side(
     special_ids = get_special_ids_for_text_count(tokenizer)
     special_ids_tensor = torch.tensor(sorted(special_ids), device=device, dtype=torch.long)
 
+    MAX_INFER_BATCHES = 60
+
     with torch.no_grad():
-        for sample_indices, batch in tqdm(loader, desc=f"Infer {side} - {subset} rank{rank}", disable=not is_main_process()):
+        for batch_idx, (sample_indices, batch) in enumerate(
+                tqdm(loader,
+                    total=min(len(loader), MAX_INFER_BATCHES),
+                    desc=f"Infer {side} - {subset} rank{rank}",
+                    disable=not is_main_process(),)):
+            
+            if batch_idx >= MAX_INFER_BATCHES:
+                break
+
             input_texts = batch.get("text")
             image_paths = batch.get("image_paths")
             model_inputs = move_to_device(batch, device)

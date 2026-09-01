@@ -346,6 +346,12 @@ def Llava_NEXT_process_fn(model_inputs: dict, processor, max_length=None):
 def Llava_ONEVISION_process_fn(model_inputs: dict, processor, max_length=None):
     texts = model_inputs["text"]
     images = model_inputs["images"]
+    eos_token = getattr(processor.tokenizer, "eos_token", None)
+    if eos_token:
+        texts = [
+            text if text.rstrip().endswith(eos_token) else text + eos_token
+            for text in texts
+        ]
     # print("texts:", texts)
     # print("len(images):", len(images))
     # print("images types:", [type(img) for img in images])

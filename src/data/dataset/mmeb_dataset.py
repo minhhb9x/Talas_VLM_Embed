@@ -27,6 +27,8 @@ def process_image(image, resolution, max_dim=1344):
         image = image.resize((1344, 1344))
     elif resolution == "mid":
         image = image.resize((672, 672))
+    elif resolution == "tiny":
+        image = image.resize((336, 336))
     elif resolution == "low":
         image = image.resize((128, 128))
     else:
