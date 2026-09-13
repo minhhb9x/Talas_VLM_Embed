@@ -23,6 +23,8 @@ from .grad_aggregation import GradPoolingLoss
 from .talas import Talas
 from .talas_jepa import TalasJepa
 from .similarity_matrix_distillation import SimilarityMatrixDistillationLoss
+from .simcse_cka_kd_loss import SimcseCKA
+from .span_propose_attn_llava_ov import SpanProposeCriterionWeightedLLavaOV
 
 criterion_list = {
     "contrastive": ContrastiveLoss,
@@ -51,6 +53,8 @@ criterion_list = {
     "talas": Talas,
     "talas_jepa": TalasJepa,
     "similarity_matrix_distillation": SimilarityMatrixDistillationLoss,
+    "simcse_cka_loss": SimcseCKA,
+    "span_propose_attn_llava_ov": SpanProposeCriterionWeightedLLavaOV,
 }
 
 def build_criterion(args):

@@ -63,7 +63,7 @@ def process_image(image, resolution, max_dim=1344):
     elif resolution == "low":
         target_max = 448
     elif resolution == "tiny":
-        target_max = 128
+        target_max = 336
     else:
         target_max = max_dim
 

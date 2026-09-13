@@ -193,17 +193,8 @@ class TalasJepa(nn.Module):
         num_stu_layer = len(student_qry_hidden_states)
 
         kd_simcse = 0.0
-        last_stu_qry_hidden_state = pooling(student_qry_hidden_states[-1], 
-                                            student_qry_input['attention_mask'], 
-                                            mode='eos',
-                                            normalize=True)
-        last_stu_pos_hidden_state = pooling(student_pos_hidden_states[-1], 
-                                            student_pos_input['attention_mask'], 
-                                            mode='eos',
-                                            normalize=True)
-        
-        kd_simcse += self.distillcse_kd_loss(last_stu_qry_hidden_state, last_stu_pos_hidden_state, 
-                                            teacher_qry_reps, teacher_pos_reps)
+        kd_simcse += self.distillcse_kd_loss(all_student_qry_reps, all_student_pos_reps,
+                                                all_teacher_qry_reps, all_teacher_pos_reps)
 
         ##################################
 
@@ -268,9 +259,9 @@ class TalasJepa(nn.Module):
                 vision_loss += nn.MSELoss()(stu_img_pos_reps, 
                                             projectors['t2s'](tea_img_pos_reps))
 
-        vision_loss = vision_loss / (len(stu_img_qry_reps) + len(stu_img_pos_reps) + 1e-8)
-
-                
+        if len(stu_img_qry_reps) > 0 and len(stu_img_pos_reps) > 0:
+            vision_loss = vision_loss / 2  
+            SIGReg = SIGReg / 2              
 
         loss_distill = kd_simcse + vision_loss 
 

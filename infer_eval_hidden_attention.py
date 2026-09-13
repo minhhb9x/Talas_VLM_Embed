@@ -14,6 +14,9 @@ from src.data.collator.eval_collator import EvalCollator
 from src.data.dataset.mmeb_dataset import EvalDataset
 from src.model.model import MMEBModel
 from src.model.processor import load_processor
+from functools import partial
+from src.model.processor import VLM_IMAGE_TOKENS
+
 
 
 POS_MOD_CLASS_LABEL = "Represent the class label: "
@@ -46,26 +49,82 @@ POS_MOD_DICT = {
     "VisualNews_i2t": POS_MOD_IMAGE_CAPTION,
 }
 
+def move_image_token_to_end(text, image_token):
+    if not text or image_token not in text:
+        return text
+
+    text = text.rstrip()
+
+    num_images = text.count(image_token)
+
+    # Xóa placeholder khỏi vị trí cũ
+    text_parts = [
+        part.strip()
+        for part in text.split(image_token)
+        if part.strip()
+    ]
+    text_without_images = " ".join(text_parts)
+
+    # Đưa placeholder xuống cuối phần nội dung
+    image_suffix = " ".join([image_token] * num_images)
+
+    parts = [text_without_images, image_suffix]
+
+    return "\n".join(part for part in parts if part)
 
 class IndexedDataset(Dataset):
-    def __init__(self, dataset):
+    def __init__(self, dataset, text_transform=None):
         self.dataset = dataset
+        self.text_transform = text_transform
 
     def __len__(self):
         return len(self.dataset)
 
     def __getitem__(self, idx):
-        return idx, self.dataset[idx]
+        text, image = self.dataset[idx]
+
+        if self.text_transform is not None:
+            text = self.text_transform(text)
+
+        # if idx < 5:
+        #     print(f"IndexedDataset[{idx}]:")
+        #     print(f"text => {text}")
+        #     print(f"image => {image}")
+
+        return idx, (text, image)
 
 
 class StrideDistributedSampler(Sampler):
-    def __init__(self, dataset):
+    def __init__(self, dataset, shuffle=True, seed=42):
         self.dataset = dataset
         self.rank = dist.get_rank() if dist.is_initialized() else 0
         self.world_size = dist.get_world_size() if dist.is_initialized() else 1
 
+        self.shuffle = shuffle
+        self.seed = seed
+        self.epoch = 0
+
+    def set_epoch(self, epoch):
+        self.epoch = epoch
+
     def __iter__(self):
-        return iter(range(self.rank, len(self.dataset), self.world_size))
+        n = len(self.dataset)
+
+        if self.shuffle:
+            generator = torch.Generator()
+            generator.manual_seed(self.seed + self.epoch)
+
+            indices = torch.randperm(
+                n,
+                generator=generator,
+            ).tolist()
+        else:
+            indices = list(range(n))
+
+        # Chia theo stride sau khi shuffle
+        indices = indices[self.rank::self.world_size]
+
+        return iter(indices)
 
     def __len__(self):
         total = len(self.dataset)
@@ -151,7 +210,10 @@ def get_special_ids_for_text_count(tokenizer):
 
     eos_ids = tokenizer.eos_token_id
     eos_ids = [] if eos_ids is None else eos_ids if isinstance(eos_ids, list) else [eos_ids]
-    return set(getattr(tokenizer, "all_special_ids", [])) - set(eos_ids)
+    return (
+        set(getattr(tokenizer, "all_special_ids", []))
+        | set(tokenizer.added_tokens_encoder.values())
+    ) - set(eos_ids)
 
 
 def load_infer_model(model_args, data_args, device):
@@ -254,10 +316,10 @@ def build_eval_dataset(data_args, model_args, subset, side):
     )
 
 
-def build_loader(data_args, model_args, processor, subset, side, batch_size, dataset=None):
+def build_loader(data_args, model_args, processor, subset, side, batch_size, dataset=None, text_transform=None):
     if dataset is None:
         dataset = build_eval_dataset(data_args, model_args, subset, side)
-    indexed_dataset = IndexedDataset(dataset)
+    indexed_dataset = IndexedDataset(dataset, text_transform)
     collator = IndexedEvalCollator(EvalCollator(data_args=data_args, model_args=model_args, processor=processor))
     loader = DataLoader(
         indexed_dataset,
@@ -392,6 +454,8 @@ def build_saved_item(
     num_image_tokens,
     num_text_tokens,
     num_valid_tokens,
+    last_image_token=False,
+    has_eos_id=False,
 ):
     return {
         "path": out_path,
@@ -412,6 +476,8 @@ def build_saved_item(
         "subset": subset,
         "side": side,
         "sample_idx": sample_idx,
+        "last_image_token": last_image_token,
+        "has_eos_id": has_eos_id
     }
 
 
@@ -429,15 +495,17 @@ def infer_side(
     query_to_target_indices,
     tgt_dataset,
     dataset=None,
+    text_transform=None,
+    last_image_token=False,
 ):
-    dataset, loader = build_loader(data_args, model_args, processor, subset, side, batch_size, dataset=dataset)
+    dataset, loader = build_loader(data_args, model_args, processor, subset, side, batch_size, dataset=dataset, text_transform=text_transform)
     side_dir = os.path.join(infer_output_path, subset, side)
     os.makedirs(side_dir, exist_ok=True)
     rank = get_rank()
     special_ids = get_special_ids_for_text_count(tokenizer)
     special_ids_tensor = torch.tensor(sorted(special_ids), device=device, dtype=torch.long)
 
-    MAX_INFER_BATCHES = 60
+    MAX_INFER_BATCHES = 5
 
     with torch.no_grad():
         for batch_idx, (sample_indices, batch) in enumerate(
@@ -447,7 +515,7 @@ def infer_side(
                     disable=not is_main_process(),)):
             
             if batch_idx >= MAX_INFER_BATCHES:
-                break
+                exit(0)
 
             input_texts = batch.get("text")
             image_paths = batch.get("image_paths")
@@ -455,7 +523,7 @@ def infer_side(
             _, image_features, attention_matrix, hidden_states = model.encode_input(model_inputs)
 
             last_hidden_batch = hidden_states[-1].detach()
-
+            has_eos_id = (model_inputs["input_ids"] == tokenizer.eos_token_id).any().item()
             for local_idx, sample_idx in enumerate(sample_indices.tolist()):
                 idx = int(sample_idx)
                 out_path = os.path.join(side_dir, f"{idx:08d}.pt")
@@ -463,6 +531,7 @@ def infer_side(
 
                 num_image_tokens = count_image_tokens(image_features, local_idx)
                 num_text_tokens = count_text_tokens(model_inputs, special_ids_tensor, local_idx)
+
                 num_valid_tokens = num_image_tokens + num_text_tokens
                 token_slice = get_clean_token_slice(
                     model_inputs["attention_mask"][local_idx],
@@ -492,6 +561,8 @@ def infer_side(
                     num_image_tokens=num_image_tokens,
                     num_text_tokens=num_text_tokens,
                     num_valid_tokens=num_valid_tokens,
+                    last_image_token=last_image_token,
+                    has_eos_id=has_eos_id
                 )
                 if side == "query":
                     add_query_target_info(item, idx, query_to_target_indices, tgt_dataset)
@@ -502,7 +573,17 @@ def infer_side(
 def main():
     fix_local_rank_arg()
     parser = HfArgumentParser((ModelArguments, DataArguments, TrainingArguments))
-    model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+    parser.add_argument("--last_image_token", action="store_true", help="Use the last image token for hidden/attention inference.")
+    model_args, data_args, training_args, extra_args = parser.parse_args_into_dataclasses()
+
+    text_transform = None
+    if extra_args.last_image_token:
+        text_transform = partial(
+            move_image_token_to_end,
+            image_token=VLM_IMAGE_TOKENS[model_args.model_backbone],
+        )
+
+    print(f"Convert image token to the end: {extra_args.last_image_token}")
 
     runtime_data_args = make_runtime_data_args(data_args)
     if runtime_data_args.encode_output_path is None:
@@ -542,6 +623,8 @@ def main():
                 query_to_target_indices,
                 tgt_dataset,
                 dataset=dataset,
+                text_transform=text_transform,
+                last_image_token=extra_args.last_image_token
             )
 
 
