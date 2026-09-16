@@ -25,6 +25,8 @@ from .talas_jepa import TalasJepa
 from .similarity_matrix_distillation import SimilarityMatrixDistillationLoss
 from .simcse_cka_kd_loss import SimcseCKA
 from .span_propose_attn_llava_ov import SpanProposeCriterionWeightedLLavaOV
+from .mse_kd_loss import MSEKDLoss
+from .mse_jepa_kd_loss import MSEJepaKDLoss
 
 criterion_list = {
     "contrastive": ContrastiveLoss,
@@ -55,6 +57,9 @@ criterion_list = {
     "similarity_matrix_distillation": SimilarityMatrixDistillationLoss,
     "simcse_cka_loss": SimcseCKA,
     "span_propose_attn_llava_ov": SpanProposeCriterionWeightedLLavaOV,
+
+    "mse_kd": MSEKDLoss, 
+    "mse_jepa_kd": MSEJepaKDLoss,
 }
 
 def build_criterion(args):

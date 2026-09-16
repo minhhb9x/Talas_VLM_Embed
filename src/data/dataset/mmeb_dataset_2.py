@@ -20,31 +20,22 @@ from typing import Iterator, List, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
+
 def process_image(image, resolution, max_dim=1344):
     if image is None:
         return None
-
-    width, height = image.size
-    max_side = max(width, height)
-
     if resolution == "high":
-        target_max = 1344
+        image = image.resize((1344, 1344))
     elif resolution == "mid":
-        target_max = 672
+        image = image.resize((672, 672))
     elif resolution == "low":
-        target_max = 448
+        image = image.resize((448, 448))
     elif resolution == "tiny":
-        target_max = 336
+        image = image.resize((336, 336))
     else:
-        target_max = max_dim
-
-    # Tính tỉ lệ scale sao cho cạnh lớn nhất = target_max
-    if max_side > target_max:
-        scale = target_max / max_side
-        new_width = int(width * scale)
-        new_height = int(height * scale)
-        image = image.resize((new_width, new_height))
-
+        cur_max_dim = max(image.size)
+        if cur_max_dim > max_dim:
+            image = image.resize((max_dim, max_dim))
     return image
 
 
@@ -269,9 +260,17 @@ class EvalDataset(Dataset):
         self.model_args = model_args
         self.backbone = self.model_args.model_backbone
 
+        # self.eval_data = load_dataset(
+        #     self.data_args.dataset_name,
+        #     subset,
+        #     split=self.data_args.dataset_split,
+        # )
         self.eval_data = load_dataset(
-            self.data_args.dataset_name,
-            subset,
+            "parquet",
+            data_files={
+                self.data_args.dataset_split:
+                    f"{self.data_args.dataset_name}/{subset}/{self.data_args.dataset_split}-00000-of-00001.parquet"
+            },
             split=self.data_args.dataset_split,
         )
         if (subset =="WebQA" or subset=="EDIS") and "qry_text" in self.eval_data.column_names and model_args.model_backbone=="llava_qwen2":

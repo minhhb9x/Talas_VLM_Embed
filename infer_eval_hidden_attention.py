@@ -95,7 +95,7 @@ class IndexedDataset(Dataset):
 
 
 class StrideDistributedSampler(Sampler):
-    def __init__(self, dataset, shuffle=True, seed=42):
+    def __init__(self, dataset, shuffle=False, seed=42):
         self.dataset = dataset
         self.rank = dist.get_rank() if dist.is_initialized() else 0
         self.world_size = dist.get_world_size() if dist.is_initialized() else 1
