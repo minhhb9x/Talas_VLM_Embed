@@ -126,6 +126,15 @@ class TrainingArguments(TrainingArguments):
         metadata={"help": "List of split layers for student; number of elements equals number of projectors"}   
     )
     w_cross_modal_loss: float = field(default=1.0, metadata={"help": "weight for cross modal loss"})
+
+    use_distill_loss: bool = field(default=True, metadata={"help": "Use distill loss"})
+    use_distill_cse_loss: bool = field(default=True, metadata={"help": "Use distill cse loss"})
+    use_distill_vison_loss: bool = field(default=True, metadata={"help": "Use distill vison loss"})
+    use_sigreg_loss: bool = field(default=True, metadata={"help": "Use sigreg loss"})
+    sigreg_weight: float = field(default=0.05, metadata={"help": "weight for sigreg loss"})
+    num_layers: int = field(default=1, metadata={"help": "Number of layers for sigreg"})
+    d_cse_temperature: float = field(default=0.02, metadata={"help": "distill cse temperature for softmax"})
+
 @dataclass
 class MTEBArguments:
     device: str = field(default="cuda", metadata={"help": "use cuda for single GPU inference, if multiple GPUs are available it will use DP automatically"})

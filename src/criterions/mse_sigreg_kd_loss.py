@@ -6,9 +6,9 @@ from torch import Tensor
 import random
 import math
 
-class MSEJepaKDLoss(nn.Module):
+class MSESigRegLoss(nn.Module):
     def __init__(self, args):
-        super(MSEJepaKDLoss, self).__init__()
+        super(MSESigRegLoss, self).__init__()
         self.args = args
         self.loss_fn = nn.CrossEntropyLoss()
         self.kd_loss_weight = self.args.kd_weight
@@ -154,7 +154,7 @@ class MSEJepaKDLoss(nn.Module):
         # Compute signature regularization loss
         sigreg_loss = self.sigreg(student_qry_reps) + self.sigreg(student_pos_reps)
 
-        loss = contrastive_loss + self.kd_loss_weight * kd_loss + self.sigreg_weight * sigreg_loss
+        loss = contrastive_loss + self.kd_loss_weight * kd_loss + self.args.sigreg_weight * sigreg_loss
 
         return {
             'loss': loss,
