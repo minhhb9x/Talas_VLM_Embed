@@ -32,6 +32,7 @@ from .rkd_sigreg_kd_loss import RKDSigRegLoss
 from .ckd_sigreg_kd_loss import CKDSigRegLoss
 from .emo_sigreg_kd_loss import EMOSigRegLoss
 from .em_sigreg_kd_loss import EMSigRegKDLoss
+from .span_attn_sigreg import SpanSigregCriterionWeighted
 
 criterion_list = {
     "contrastive": ContrastiveLoss,
@@ -69,6 +70,7 @@ criterion_list = {
     "ckd_sigreg_kd": CKDSigRegLoss,
     "emo_sigreg_kd": EMOSigRegLoss,
     "em_sigreg_kd": EMSigRegKDLoss,
+    "span_attn_sigreg_kd": SpanSigregCriterionWeighted,
 }
 
 def build_criterion(args):

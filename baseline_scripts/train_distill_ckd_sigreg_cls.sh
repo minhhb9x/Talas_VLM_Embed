@@ -48,7 +48,8 @@ torchrun --standalone \
     --kd_loss_type "ckd_sigreg_kd" \
     --image_resolution "low" \
     --projector_config_path "./config/projector_config_emo.json" \
-    --projector_lr 5e-4 
+    --projector_lr 5e-4 \
+    --sigreg_weight 0.5
 
 
 EVAL_SUBSETS=(

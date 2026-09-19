@@ -23,11 +23,11 @@ torchrun --standalone \
     --model_backbone "llava_qwen2" \
     --pooling "eos" \
     --dataset_name "TIGER-Lab/MMEB-train" \
-    --subset_name "ImageNet_1K" "N24News" "HatefulMemes" "VOC2007" "SUN397" \
+    --subset_name "OK-VQA" "A-OKVQA" "DocVQA" "InfographicsVQA" "ChartQA" "Visual7W" \
     --dataset_split "original" \
     --image_dir "vlm2vec_train/MMEB-train" \
     --percent_data 1.0 \
-    --output_dir "training/FastVLM-0.5B_lasd=resim_1.0_eos_constant_0.05scheduler_cls" \
+    --output_dir "training/FastVLM-0.5B_talas_jepa_vqa" \
     --per_device_train_batch_size 16 \
     --gradient_accumulation_steps 1 \
     --learning_rate 1e-4 \
@@ -43,10 +43,10 @@ torchrun --standalone \
     --lr_scheduler_type "constant" \
     --warmup_ratio 0.05 \
     --kd_weight 1.0 \
-    --caching_dir "caching/B3_Qwen2_2B_cls" \
-    --kd_loss_type "talas" \
+    --caching_dir "caching/B3_Qwen2_2B_vqa" \
+    --kd_loss_type "talas_jepa" \
     --image_resolution "low" \
-    --num_projectors 1 \
+    --projector_config_path "./config/projector_config_emo.json" \
     --num_self_kd_layers 3 \
     --projector_lr 5e-5 \
     --report_to None

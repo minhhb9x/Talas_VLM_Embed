@@ -203,6 +203,8 @@ class TalasJepa(nn.Module):
         cur_idx_qry_img = 0
         cur_idx_pos_img = 0
 
+        NUM_SLICES = 512
+
         student_special_ids = torch.tensor(
             list(set(list(student_tokenizer.added_tokens_encoder.values()) + student_tokenizer.all_special_ids) 
                  - set([student_tokenizer.eos_token_id])),
@@ -232,7 +234,7 @@ class TalasJepa(nn.Module):
 
             if len(stu_img_qry_reps) > 0:
                 stu_img_qry_reps = torch.stack(stu_img_qry_reps, dim=0)
-                SIGReg = SIGReg + self.sigreg(stu_img_qry_reps, num_slices=256)
+                SIGReg = SIGReg + self.sigreg(stu_img_qry_reps, num_slices=NUM_SLICES)
                 vision_loss += nn.MSELoss()(stu_img_qry_reps, 
                                             projectors['t2s'](tea_img_qry_reps))
 
@@ -255,7 +257,7 @@ class TalasJepa(nn.Module):
 
             if len(stu_img_pos_reps) > 0:
                 stu_img_pos_reps = torch.stack(stu_img_pos_reps, dim=0)
-                SIGReg = SIGReg + self.sigreg(stu_img_pos_reps, num_slices=256)
+                SIGReg = SIGReg + self.sigreg(stu_img_pos_reps, num_slices=NUM_SLICES)
                 vision_loss += nn.MSELoss()(stu_img_pos_reps, 
                                             projectors['t2s'](tea_img_pos_reps))
 

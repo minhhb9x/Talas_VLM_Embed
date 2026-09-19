@@ -10,17 +10,18 @@ import os
 from src.arguments import ModelArguments, TrainingArguments
 from src.model.modules import ModalityGatedPooling
 from src.model.processor import LLAVA_NEXT, QWEN2_VL, PHI3V, get_backbone_name, print_master, QWEN2_5_VL, \
-    backbone2model, QWEN2_VL_TOKENSELECTION, QWEN2_5_VL_TOKENSELECTION, LLAVA_ONEVISION, LLAVA_QWEN2
+    backbone2model, QWEN2_VL_TOKENSELECTION, QWEN2_5_VL_TOKENSELECTION, LLAVA_ONEVISION, LLAVA_QWEN2, QWEN3_VL
 
 from src.arguments import ModelArguments
 from src.model.processor import LLAVA_NEXT, QWEN2_VL, PHI3V, get_backbone_name, print_master, QWEN2_5_VL, \
-    QWEN2_VL_TOKENSELECTION, backbone2model, GME, VLM_IMAGE_TOKENS, LamRA, COLPALI, INTERN_VL3, LLAVA_ONEVISION
+    QWEN2_VL_TOKENSELECTION, backbone2model, GME, VLM_IMAGE_TOKENS, LamRA, COLPALI, INTERN_VL3, LLAVA_ONEVISION, QWEN3_VL
 from src.model.vlm_backbone.colpali import ColPali
 from src.model.vlm_backbone.gme.gme_inference import GmeQwen2VL
 from src.model.vlm_backbone.lamra.lamra_inference import LamRAQwen2VL
 from src.model.vlm_backbone.phi3_v.modeling_phi3_v import Phi3VForCausalLM
 from src.model.vlm_backbone.llava_next import LlavaNextForConditionalGeneration
 from src.model.vlm_backbone.llava_onevision import LlavaOnevisionForConditionalGeneration
+from src.model.vlm_backbone.qwen3_vl_embedding import Qwen3VLForEmbedding
 from src.model.llava.model import *
 from src.model.llava.constants import DEFAULT_IMAGE_PATCH_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
 
@@ -149,6 +150,16 @@ class MMEBModel(nn.Module):
             pooled_output = self._pooling(last_hidden_state, input['attention_mask'])
 
             return pooled_output, image_features, attention_matrix, output_hidden_states
+        elif getattr(self, "model_backbone", None) in [QWEN3_VL]:
+            hidden_states = self.encoder(**input, return_dict = True, output_hidden_states=True, output_attentions=True)
+            output_hidden_states = hidden_states.hidden_states
+            
+            attention_matrix = hidden_states.attentions if hasattr(hidden_states, 'attentions') else None
+            last_hidden_state = hidden_states.last_hidden_state
+            pooled_output = self._pooling(last_hidden_state, attention_mask=hidden_states.attention_mask)
+            # print("pooled_output shape:", pooled_output.shape)
+            # print("last_hidden_state shape:", last_hidden_state.shape)
+            return pooled_output, None, attention_matrix, output_hidden_states
         else:
             # import ipdb; ipdb.set_trace()
             hidden_states = self.encoder(**input, return_dict=True, output_hidden_states=True, output_attentions=True)
@@ -333,6 +344,17 @@ class MMEBModel(nn.Module):
                 config=config,
                 # **kwargs
             )
+        elif model_backbone in [QWEN3_VL]:
+            print("Build model with Qwen3VL Embedding")
+            config._attn_implementation = "eager"
+            config.padding_side = "right"
+            config.use_cache = False
+            base_model = backbone2model[model_backbone].from_pretrained(
+                model_args.model_name, 
+                config=config, 
+                torch_dtype=torch.bfloat16,
+                low_cpu_mem_usage=True
+            )
         else:
             config.use_cache = False
             base_model = cls.TRANSFORMER_CLS.from_pretrained(
@@ -499,7 +521,7 @@ class MMEBModel(nn.Module):
             model_backbone = get_backbone_name(hf_config=config, model_type=model_args.model_type)
             setattr(model_args, 'model_backbone', model_backbone)
         print_master(f'Loading backbone [{model_args.model_backbone}] from {model_args.model_name}')
-        if model_args.model_backbone in {LLAVA_ONEVISION, LLAVA_NEXT, QWEN2_VL, QWEN2_5_VL, QWEN2_VL_TOKENSELECTION, QWEN2_5_VL_TOKENSELECTION}:
+        if model_args.model_backbone in {LLAVA_ONEVISION, LLAVA_NEXT, QWEN2_VL, QWEN2_5_VL, QWEN2_VL_TOKENSELECTION, QWEN2_5_VL_TOKENSELECTION, QWEN3_VL}:
             config = AutoConfig.from_pretrained(model_args.model_name, trust_remote_code=True)
             config._attn_implementation = "eager"
             config.vision_config._attn_implementation = "eager"

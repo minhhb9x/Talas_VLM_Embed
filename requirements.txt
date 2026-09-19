@@ -1,7 +1,7 @@
+torch==2.7.1
 numpy==1.26.4
-torch==2.9.0
-torchvision==0.24.0
-transformers==4.56.1
+torchvision==0.22.1
+transformers==4.57.6
 huggingface-hub
 peft==0.17.1
 accelerate==1.10.1
@@ -17,7 +17,7 @@ scikit-learn
 scikit-image
 qwen_vl_utils
 ray
-timm==0.9.12
+timm
 sentencepiece
 opencv-python
 decord
@@ -25,6 +25,7 @@ hnswlib
 einops
 deepspeed==0.17.6
 numba
+num2words==0.5.14
 tslearn
 hdbscan
 spacy
