@@ -383,7 +383,7 @@ class TalasJepa(nn.Module):
         return loss_sigreg.mean()
 
     def _compute_modality_distill(self, student_hidden_states, image_features, 
-                                  text_token_counts, attention_mask, concept_queries):
+                                  text_token_counts, attention_mask):
         """
         Hàm này chỉ còn nhiệm vụ trích xuất text và vision representations 
         của student, cùng với việc tính toán SIGReg loss.
@@ -427,7 +427,9 @@ class TalasJepa(nn.Module):
         # 2. Gom representations của Vision và tính SIGReg
         stu_img_final_reps = None
         sigreg_final = 0.0
-        
+
+        NUM_SLICES = 256
+
         if len(stu_img_tokens[last_layer_idx]) > 0:
             stu_img_final_reps = torch.stack([x.mean(dim=0) for x in stu_img_tokens[last_layer_idx]], dim=0) 
 
@@ -445,7 +447,8 @@ class TalasJepa(nn.Module):
                 # total_sigreg += self.sigreg_sinkhorn(stu_img_tokens[l], concept_queries)
 
                 sigreg_erank_loss += self.sketched_participation_ratio_erank(stu_img_tokens[0], 
-                                                                             stu_img_tokens[l])
+                                                                             stu_img_tokens[l],
+                                                                             num_slices=NUM_SLICES)
 
             if self.args.use_sigreg_loss:
                 sigreg_final = sigreg_erank_loss  / max(1, k_layers)
@@ -455,8 +458,7 @@ class TalasJepa(nn.Module):
     def forward(self, model_wrapper, input_data):
         student_model = model_wrapper.model
         student_processor = model_wrapper.get_processor()
-        student_tokenizer = student_processor.tokenizer
-        concept_queries = model_wrapper.concept_queries      
+        student_tokenizer = student_processor.tokenizer 
 
         student_qry_input = input_data['qry']
         student_pos_input = input_data['pos']
@@ -534,7 +536,6 @@ class TalasJepa(nn.Module):
             image_features=student_qry_image_features,
             text_token_counts=num_student_text_qry_tokens, 
             attention_mask=student_qry_input['attention_mask'], 
-            concept_queries=concept_queries
         )
 
         # Trích xuất Representations từ POS
@@ -543,7 +544,6 @@ class TalasJepa(nn.Module):
             image_features=student_pos_image_features,
             text_token_counts=num_student_text_pos_tokens, 
             attention_mask=student_pos_input['attention_mask'], 
-            concept_queries=concept_queries
         )
 
         stu_modality_features = []
