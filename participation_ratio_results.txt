@@ -1,0 +1,152 @@
+Requested samples: 50
+Loaded files: 50
+L2-normalized image/text tokens: False
+Participation ratio normalization: min(n, d)
+File selection order: filename sort
+Per-sample image participation ratio shape: (50, 24)
+Per-sample text participation ratio shape: (50, 24)
+Last-token hidden-state shape: (50, 24, 896)
+
+Loaded sample files:
+  00000000.pt
+  00000001.pt
+  00000002.pt
+  00000003.pt
+  00000004.pt
+  00000005.pt
+  00000006.pt
+  00000007.pt
+  00000008.pt
+  00000009.pt
+  00000010.pt
+  00000011.pt
+  00000012.pt
+  00000013.pt
+  00000014.pt
+  00000015.pt
+  00000016.pt
+  00000017.pt
+  00000018.pt
+  00000019.pt
+  00000020.pt
+  00000021.pt
+  00000022.pt
+  00000023.pt
+  00000024.pt
+  00000025.pt
+  00000026.pt
+  00000027.pt
+  00000028.pt
+  00000029.pt
+  00000030.pt
+  00000031.pt
+  00000032.pt
+  00000033.pt
+  00000034.pt
+  00000035.pt
+  00000036.pt
+  00000037.pt
+  00000038.pt
+  00000039.pt
+  00000040.pt
+  00000041.pt
+  00000042.pt
+  00000043.pt
+  00000044.pt
+  00000045.pt
+  00000046.pt
+  00000047.pt
+  00000048.pt
+  00000049.pt
+
+IMAGE TOKEN PRTICIPATION RATIO
+Image participation ratio per layer:
+  layer 00: per_sample_mean=0.059967, per_sample_std=0.012839, all_token_pr=0.061954, mean_pooled_pr=0.399572
+  layer 01: per_sample_mean=0.063152, per_sample_std=0.012696, all_token_pr=0.059502, mean_pooled_pr=0.399046
+  layer 02: per_sample_mean=0.020099, per_sample_std=0.002461, all_token_pr=0.007112, mean_pooled_pr=0.383041
+  layer 03: per_sample_mean=0.014583, per_sample_std=0.001532, all_token_pr=0.004813, mean_pooled_pr=0.398365
+  layer 04: per_sample_mean=0.004832, per_sample_std=0.000103, all_token_pr=0.001411, mean_pooled_pr=0.398808
+  layer 05: per_sample_mean=0.004846, per_sample_std=0.000098, all_token_pr=0.001414, mean_pooled_pr=0.396285
+  layer 06: per_sample_mean=0.004794, per_sample_std=0.000088, all_token_pr=0.001398, mean_pooled_pr=0.376558
+  layer 07: per_sample_mean=0.004754, per_sample_std=0.000084, all_token_pr=0.001384, mean_pooled_pr=0.384311
+  layer 08: per_sample_mean=0.004764, per_sample_std=0.000084, all_token_pr=0.001387, mean_pooled_pr=0.377493
+  layer 09: per_sample_mean=0.004796, per_sample_std=0.000086, all_token_pr=0.001395, mean_pooled_pr=0.374442
+  layer 10: per_sample_mean=0.004857, per_sample_std=0.000094, all_token_pr=0.001414, mean_pooled_pr=0.370611
+  layer 11: per_sample_mean=0.004946, per_sample_std=0.000103, all_token_pr=0.001441, mean_pooled_pr=0.376675
+  layer 12: per_sample_mean=0.005004, per_sample_std=0.000102, all_token_pr=0.001459, mean_pooled_pr=0.367238
+  layer 13: per_sample_mean=0.005087, per_sample_std=0.000103, all_token_pr=0.001484, mean_pooled_pr=0.368609
+  layer 14: per_sample_mean=0.005197, per_sample_std=0.000112, all_token_pr=0.001518, mean_pooled_pr=0.367985
+  layer 15: per_sample_mean=0.005390, per_sample_std=0.000127, all_token_pr=0.001578, mean_pooled_pr=0.365178
+  layer 16: per_sample_mean=0.005932, per_sample_std=0.000186, all_token_pr=0.001752, mean_pooled_pr=0.377353
+  layer 17: per_sample_mean=0.006203, per_sample_std=0.000203, all_token_pr=0.001848, mean_pooled_pr=0.368485
+  layer 18: per_sample_mean=0.006458, per_sample_std=0.000236, all_token_pr=0.001936, mean_pooled_pr=0.368136
+  layer 19: per_sample_mean=0.006836, per_sample_std=0.000273, all_token_pr=0.002063, mean_pooled_pr=0.363711
+  layer 20: per_sample_mean=0.007400, per_sample_std=0.000343, all_token_pr=0.002269, mean_pooled_pr=0.355592
+  layer 21: per_sample_mean=0.008937, per_sample_std=0.000586, all_token_pr=0.002862, mean_pooled_pr=0.408653
+  layer 22: per_sample_mean=0.014431, per_sample_std=0.001320, all_token_pr=0.005023, mean_pooled_pr=0.408064
+  layer 23: per_sample_mean=0.069736, per_sample_std=0.012270, all_token_pr=0.072864, mean_pooled_pr=0.345119
+
+Last layer image per-sample mean participation ratio: 0.069736
+Last layer image all-token participation ratio: 0.072864
+Last layer image mean-pooled participation ratio: 0.345119
+
+TEXT TOKEN PRTICIPATION RATIO
+Text participation ratio per layer:
+  layer 00: per_sample_mean=0.671313, per_sample_std=0.003648, all_token_pr=0.013750, mean_pooled_pr=0.149674
+  layer 01: per_sample_mean=0.708893, per_sample_std=0.003794, all_token_pr=0.014627, mean_pooled_pr=0.188852
+  layer 02: per_sample_mean=0.725541, per_sample_std=0.005710, all_token_pr=0.015386, mean_pooled_pr=0.196397
+  layer 03: per_sample_mean=0.712445, per_sample_std=0.005294, all_token_pr=0.015064, mean_pooled_pr=0.160330
+  layer 04: per_sample_mean=0.719101, per_sample_std=0.005284, all_token_pr=0.015178, mean_pooled_pr=0.168986
+  layer 05: per_sample_mean=0.720857, per_sample_std=0.004397, all_token_pr=0.015230, mean_pooled_pr=0.170085
+  layer 06: per_sample_mean=0.739004, per_sample_std=0.004851, all_token_pr=0.015753, mean_pooled_pr=0.208375
+  layer 07: per_sample_mean=0.743131, per_sample_std=0.004048, all_token_pr=0.015947, mean_pooled_pr=0.216099
+  layer 08: per_sample_mean=0.749371, per_sample_std=0.003949, all_token_pr=0.016074, mean_pooled_pr=0.200927
+  layer 09: per_sample_mean=0.737924, per_sample_std=0.006660, all_token_pr=0.015888, mean_pooled_pr=0.191263
+  layer 10: per_sample_mean=0.737127, per_sample_std=0.012598, all_token_pr=0.016136, mean_pooled_pr=0.142291
+  layer 11: per_sample_mean=0.732249, per_sample_std=0.011577, all_token_pr=0.016190, mean_pooled_pr=0.176255
+  layer 12: per_sample_mean=0.727691, per_sample_std=0.009447, all_token_pr=0.016199, mean_pooled_pr=0.178907
+  layer 13: per_sample_mean=0.731990, per_sample_std=0.008658, all_token_pr=0.016399, mean_pooled_pr=0.184879
+  layer 14: per_sample_mean=0.734689, per_sample_std=0.010330, all_token_pr=0.016656, mean_pooled_pr=0.212416
+  layer 15: per_sample_mean=0.746170, per_sample_std=0.010764, all_token_pr=0.016998, mean_pooled_pr=0.215544
+  layer 16: per_sample_mean=0.731419, per_sample_std=0.014031, all_token_pr=0.016442, mean_pooled_pr=0.236775
+  layer 17: per_sample_mean=0.731519, per_sample_std=0.014741, all_token_pr=0.017230, mean_pooled_pr=0.265615
+  layer 18: per_sample_mean=0.739367, per_sample_std=0.014992, all_token_pr=0.017755, mean_pooled_pr=0.288593
+  layer 19: per_sample_mean=0.743865, per_sample_std=0.012720, all_token_pr=0.018176, mean_pooled_pr=0.287815
+  layer 20: per_sample_mean=0.740715, per_sample_std=0.010615, all_token_pr=0.018884, mean_pooled_pr=0.291580
+  layer 21: per_sample_mean=0.722099, per_sample_std=0.015389, all_token_pr=0.020711, mean_pooled_pr=0.375785
+  layer 22: per_sample_mean=0.704478, per_sample_std=0.022944, all_token_pr=0.021991, mean_pooled_pr=0.411064
+  layer 23: per_sample_mean=0.590676, per_sample_std=0.039343, all_token_pr=0.015977, mean_pooled_pr=0.371846
+
+Last layer text per-sample mean participation ratio: 0.590676
+Last layer text all-token participation ratio: 0.015977
+Last layer text mean-pooled participation ratio: 0.371846
+
+LAST TOKEN PRTICIPATION RATIO
+Last-token participation ratio across samples per hidden layer:
+  layer 00: raw=0.143713, normalized=0.137841
+  layer 01: raw=0.198877, normalized=0.200033
+  layer 02: raw=0.197864, normalized=0.196306
+  layer 03: raw=0.188990, normalized=0.187998
+  layer 04: raw=0.186120, normalized=0.184589
+  layer 05: raw=0.173279, normalized=0.174938
+  layer 06: raw=0.188880, normalized=0.188306
+  layer 07: raw=0.186163, normalized=0.183739
+  layer 08: raw=0.179049, normalized=0.177448
+  layer 09: raw=0.182797, normalized=0.180149
+  layer 10: raw=0.193190, normalized=0.191465
+  layer 11: raw=0.206221, normalized=0.203137
+  layer 12: raw=0.187648, normalized=0.187846
+  layer 13: raw=0.193387, normalized=0.194391
+  layer 14: raw=0.192944, normalized=0.192667
+  layer 15: raw=0.199720, normalized=0.199507
+  layer 16: raw=0.185085, normalized=0.191590
+  layer 17: raw=0.204451, normalized=0.204554
+  layer 18: raw=0.214506, normalized=0.214840
+  layer 19: raw=0.217143, normalized=0.222002
+  layer 20: raw=0.233746, normalized=0.239991
+  layer 21: raw=0.265868, normalized=0.271370
+  layer 22: raw=0.292391, normalized=0.301438
+  layer 23: raw=0.341214, normalized=0.342442
+
+Last hidden layer last-token raw effective rank: 0.341214
+Last hidden layer last-token normalized effective rank: 0.342442

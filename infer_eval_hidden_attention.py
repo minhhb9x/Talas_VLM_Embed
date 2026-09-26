@@ -505,7 +505,7 @@ def infer_side(
     special_ids = get_special_ids_for_text_count(tokenizer)
     special_ids_tensor = torch.tensor(sorted(special_ids), device=device, dtype=torch.long)
 
-    MAX_INFER_BATCHES = 5
+    MAX_INFER_BATCHES = 50
 
     with torch.no_grad():
         for batch_idx, (sample_indices, batch) in enumerate(
@@ -514,8 +514,13 @@ def infer_side(
                     desc=f"Infer {side} - {subset} rank{rank}",
                     disable=not is_main_process(),)):
             
-            if batch_idx >= MAX_INFER_BATCHES:
+            # if not batch_idx in range(0, 10):
+            #     continue
+            
+            if MAX_INFER_BATCHES == 0:
                 exit(0)
+            else:
+                MAX_INFER_BATCHES -= 1
 
             input_texts = batch.get("text")
             image_paths = batch.get("image_paths")

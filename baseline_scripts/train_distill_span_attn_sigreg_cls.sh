@@ -4,9 +4,11 @@
 NUM_GPUS_PER_NODE=1
 
 # Đường dẫn tới file script training của bạn
-TRAIN_SCRIPT="train_ddp.py"
+TRAIN_SCRIPT="train_distill_ddp_2.py"
 
 export TORCH_DISTRIBUTED_DEBUG=DETAIL
+
+python -m spacy download en_core_web_sm
 
 # =========================================================================
 # Dùng torchrun để khởi chạy
@@ -14,12 +16,14 @@ export TORCH_DISTRIBUTED_DEBUG=DETAIL
 torchrun --standalone \
     --nproc_per_node=$NUM_GPUS_PER_NODE $TRAIN_SCRIPT \
     --model_name "apple/FastVLM-0.5B" \
+    --teacher_model_name "raghavlite/B3_Qwen2_2B" \
     --lora True \
     --teacher_lora True \
     --lora_r 64 \
     --lora_alpha 64 \
     --teacher_lora_r 8 \
     --teacher_pooling "eos" \
+    --teacher_backbone "qwen2_vl" \
     --model_backbone "llava_qwen2_old" \
     --pooling "eos" \
     --dataset_name "TIGER-Lab/MMEB-train" \
@@ -27,7 +31,7 @@ torchrun --standalone \
     --dataset_split "original" \
     --image_dir "vlm2vec_train/MMEB-train" \
     --percent_data 1.0 \
-    --output_dir "training/FastVLM-0.5B_ckd_sigreg_cls" \
+    --output_dir "training/FastVLM-0.5B_span_attn_sigreg_cls" \
     --per_device_train_batch_size 16 \
     --gradient_accumulation_steps 1 \
     --learning_rate 1e-4 \
@@ -42,11 +46,14 @@ torchrun --standalone \
     --teacher_normalize True \
     --lr_scheduler_type "cosine" \
     --warmup_ratio 0.03 \
-    --caching_dir caching/B3_Qwen2_2B_cls \
     --kd_weight 0.3 \
-    --kd_loss_type "ckd_sigreg_kd" \
+    --kd_weight 2.5 \
+    --w_cross_modal_loss 2.5 \
+    --kd_loss_type "span_attn_sigreg_kd" \
     --image_resolution "low" \
-    --projector_config_path "./config/projector_config_emo.json" \
+    --teacher_layer_mapping 0 22 25 28 \
+    --student_layer_mapping 0 18 21 24 \
+    --split_layer_mapping 0 1 4 4 4 \
     --projector_lr 5e-4 \
     --sigreg_weight 0.5
 
@@ -66,9 +73,9 @@ EVAL_SUBSETS=(
 
 
 
-python eval_mmeb.py \
-  --model_name "training/FastVLM-0.5B_ckd_sigreg_cls/checkpoint-epoch-0" \
-  --encode_output_path "./MMEB-eval_outputs/FastVLM-0.5B_ckd_sigreg_cls" \
+python eval_mmeb_2.py \
+  --model_name "training/FastVLM-0.5B_span_attn_sigreg_cls/checkpoint-epoch-0" \
+  --encode_output_path "./MMEB-eval_outputs/FastVLM-0.5B_span_attn_sigreg_cls" \
   --lora True \
   --lora_r 64 \
   --lora_alpha 64 \

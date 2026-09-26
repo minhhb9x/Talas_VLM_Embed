@@ -12,3 +12,5 @@ MMEB-eval_outputs/
 ER_outputs/
 caching/
 infer/
+meta_train/
+analyze/

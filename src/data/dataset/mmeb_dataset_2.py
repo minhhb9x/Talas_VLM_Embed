@@ -260,19 +260,19 @@ class EvalDataset(Dataset):
         self.model_args = model_args
         self.backbone = self.model_args.model_backbone
 
-        # self.eval_data = load_dataset(
-        #     self.data_args.dataset_name,
-        #     subset,
-        #     split=self.data_args.dataset_split,
-        # )
         self.eval_data = load_dataset(
-            "parquet",
-            data_files={
-                self.data_args.dataset_split:
-                    f"{self.data_args.dataset_name}/{subset}/{self.data_args.dataset_split}-00000-of-00001.parquet"
-            },
+            self.data_args.dataset_name,
+            subset,
             split=self.data_args.dataset_split,
         )
+        # self.eval_data = load_dataset(
+        #     "parquet",
+        #     data_files={
+        #         self.data_args.dataset_split:
+        #             f"{self.data_args.dataset_name}/{subset}/{self.data_args.dataset_split}-00000-of-00001.parquet"
+        #     },
+        #     split=self.data_args.dataset_split,
+        # )
         if (subset =="WebQA" or subset=="EDIS") and "qry_text" in self.eval_data.column_names and model_args.model_backbone=="llava_qwen2":
             self.eval_data = self.eval_data.map(
                 lambda x: {"qry_text": x["qry_text"].replace("<|image_1|>", "").strip()}

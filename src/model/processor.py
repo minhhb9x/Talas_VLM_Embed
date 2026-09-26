@@ -90,6 +90,8 @@ VLM_IMAGE_TOKENS = {
     COLPALI: "",
     LLAVA_QWEN2: "<image>",
     QWEN3_VL: "<|image_pad|>",
+    LLAVA_QWEN2_OLD: "<image>",
+    LLAVA_ONEVISION_OLD: "<image>",
 }
 
 VLM_VIDEO_TOKENS = {
@@ -120,6 +122,8 @@ backbone2model = {
     INTERNVIDEO2: InternVideo2_Stage2,
     LLAVA_QWEN2: LlavaQwen2ForCausalLM,
     QWEN3_VL: Qwen3VLForEmbedding,
+    LLAVA_QWEN2_OLD: LlavaQwen2ForCausalLM,
+    LLAVA_ONEVISION_OLD: LlavaOnevisionForConditionalGeneration
 }
 
 def expand2square(pil_img, background_color):
@@ -173,7 +177,7 @@ def load_processor(model_args, data_args=None):
             trust_remote_code=True,
             tokenizer=tokenizer
         )
-    elif model_args.model_backbone == LLAVA_ONEVISION:
+    elif model_args.model_backbone == LLAVA_ONEVISION or model_args.model_backbone == LLAVA_ONEVISION_OLD:
         from src.model.vlm_backbone.llava_onevision.processing_llava_onevision import LlavaOnevisionProcessor
         from transformers import AutoTokenizer
         tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=True)
@@ -280,7 +284,7 @@ def load_processor(model_args, data_args=None):
     elif model_args.model_backbone == COLPALI:
         from transformers import AutoProcessor
         processor = ColPaliProcessor.from_pretrained(model_args.model_name)
-    elif model_args.model_backbone == LLAVA_QWEN2:
+    elif model_args.model_backbone == LLAVA_QWEN2 or model_args.model_backbone == LLAVA_QWEN2_OLD:
         print("Processor load here for LLAVA-QWEN2")
         from transformers import CLIPImageProcessor, AutoTokenizer
         tokenizer = AutoTokenizer.from_pretrained(model_args.model_name)

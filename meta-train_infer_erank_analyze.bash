@@ -9,21 +9,30 @@ INFER_SUBSETS=(
 )
 
 MODELS=(
+    # "raghavlite/B3_Qwen2_2B"
+    "apple/FastVLM-0.5B"
     # "meta_train/rkd_meta_cls/checkpoint-epoch-0"
     # "meta_train/ckd_meta_cls/checkpoint-epoch-0"
     # "meta_train/norm_meta_cls/checkpoint-epoch-0"
-    "meta_train/rkd_meta_llavaov_cls/checkpoint-epoch-0"
-    "meta_train/ckd_meta_llavaov_cls/checkpoint-epoch-0"
-    "meta_train/norm_meta_llavaov_cls/checkpoint-epoch-0"
+    # meta_train/rebuttal_hierd_cls_5layers
+    # "meta_train/sft_meta_llavaov_cls/checkpoint-epoch-0"
+    # "meta_train/rkd_meta_llavaov_cls/checkpoint-epoch-0"
+    # "meta_train/ckd_meta_llavaov_cls/checkpoint-epoch-0"
+    # "meta_train/norm_meta_llavaov_cls/checkpoint-epoch-0"
+    # "meta_train/span_propose_llava_ov_cls_v3_final/checkpoint-epoch-0"
 )
 
 BACKBONES=(
+    # "qwen2_vl"
+    "llava_qwen2_old"
     # "llava_qwen2"
     # "llava_qwen2"
-    # "llava_qwen2"
-    "llava_onevision"
-    "llava_onevision"
-    "llava_onevision"
+    # "llava_qwen2_old"
+    # "llava_qwen2_old"
+    # "llava_onevision"
+    # "llava_onevision"
+    # "llava_onevision_old"
+    # "llava_onevision_old"
 )
 
 # Kiểm tra MODELS và BACKBONES có cùng số phần tử không
@@ -45,7 +54,7 @@ for i in "${!MODELS[@]}"; do
     EXTRA_ARGS=()
     OUTPUT_SUFFIX=""
 
-    if [ "$BACKBONE" = "llava_onevision" ]; then
+    if [ "$BACKBONE" = "llava_onevision" ] || [ "$BACKBONE" = "llava_onevision_old" ]; then
         IMAGE_RESOLUTION="tiny"
 
         EXTRA_ARGS+=(--image_resolution "$IMAGE_RESOLUTION")
@@ -66,7 +75,7 @@ for i in "${!MODELS[@]}"; do
 
     CUDA_VISIBLE_DEVICES=0 python "$INFER_SCRIPT" \
         --model_name "$MODEL" \
-        --lora True \
+        --lora False \
         --lora_r 64 \
         --lora_alpha 64 \
         --pooling eos \
@@ -80,7 +89,7 @@ for i in "${!MODELS[@]}"; do
         --tgt_prefix_mod \
         --encode_output_path "$INFER_OUTPUT" \
         --per_device_eval_batch_size 1 \
-        --load_pretrained_lora True \
+        --load_pretrained_lora False \
         --report_to None \
         "${EXTRA_ARGS[@]}"
 
@@ -91,9 +100,11 @@ for i in "${!MODELS[@]}"; do
 
     CUDA_VISIBLE_DEVICES=0 python er_statistic.py \
         --pt_dir "${INFER_OUTPUT}/${INFER_SUBSETS[0]}/query" \
-        --num_samples 3 \
-        --normalize \
-        --output_file "$ANALYZE_OUTPUT"
+        --num_samples 0 \
+        --normalize_by_min_dim \
+        --output_file "${ANALYZE_OUTPUT}"
+    
+    # rm -rf "${INFER_OUTPUT}"
 
     echo "Finished: ${EXP_NAME}${OUTPUT_SUFFIX}"
     echo

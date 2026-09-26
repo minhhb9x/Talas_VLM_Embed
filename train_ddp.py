@@ -9,7 +9,7 @@ import os
 import sys
 from tqdm import tqdm 
 import math
-import wandb 
+# import wandb 
 
 import torch
 import torch.nn as nn 
@@ -41,12 +41,12 @@ def seed_everything(seed: int, rank: int = 0):
     torch.cuda.manual_seed_all(seed)
 
     # Nếu bạn muốn deterministic (chậm hơn, đôi khi lỗi với một số ops)
-    # torch.backends.cudnn.deterministic = True
-    # torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
     # Bắt buộc với một số ops CUDA mới (matmul, conv...)
-    # os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
-    # torch.use_deterministic_algorithms(True)
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+    torch.use_deterministic_algorithms(True)
 
 def seed_worker(worker_id):
     worker_seed = torch.initial_seed() % 2**32
@@ -118,17 +118,7 @@ class Trainer:
         
         self.model_wrapper = DDP(self.model_wrapper, device_ids=[self.gpu_id], find_unused_parameters=True)
 
-        # <--- [THÊM] Logic kiểm tra report_to="wandb"
-        self.use_wandb = False
-        if is_main_process():
-            # Kiểm tra xem report_to có tồn tại và chứa wandb không
-            report_to = getattr(training_args, "report_to", [])
-            if report_to is None: report_to = []
-            if isinstance(report_to, str):
-                report_to = [report_to]
-            
-            if "wandb" in report_to:
-                self.use_wandb = True
+
     
     def _debug_batch_devices(self, obj, prefix=""):
         if obj is None:
@@ -156,7 +146,7 @@ class Trainer:
     def run_epoch(self, epoch):
         self.train_data.sampler.set_epoch(epoch)
         losses, contrastive_losses, kd_losses = [], [], []
-        kd_rkd_losses, ot_losses, kd_dtw_losses = [], [], []
+        kd_simcse_losses, sigreg_losses, kd_dtw_losses = [], [], []
         kd_mse_losses, kd_penultimate_losses = [], []
         
         # Tính tổng số bước (steps) trong epoch để log step
@@ -164,6 +154,7 @@ class Trainer:
 
         progress_bar = tqdm(total=steps_per_epoch, 
                             desc=f"Epoch {epoch}",
+                            dynamic_ncols=True,
                             disable=not dist.get_rank() == 0)
         for batch_idx, batch in enumerate(self.train_data):
             batch = to_device(batch, self.device)
@@ -171,8 +162,8 @@ class Trainer:
             loss = loss_dict['loss'] / self.training_args.gradient_accumulation_steps
             kd_loss = loss_dict.get('kd_loss', torch.tensor(0.0))
             contrastive_loss = loss_dict.get('contrastive_loss', torch.tensor(0.0))
-            kd_rkd_loss = loss_dict.get('kd_loss_rkd', torch.tensor(0.0))
-            ot_loss = loss_dict.get('ot_loss', torch.tensor(0.0))
+            kd_simcse_loss = loss_dict.get('kd_loss_simcse', torch.tensor(0.0))
+            sigreg_loss = loss_dict.get('sigreg_loss', torch.tensor(0.0))
             kd_dtw_loss = loss_dict.get('kd_loss_dtw', torch.tensor(0.0))
             kd_mse_loss = loss_dict.get('kd_mse_loss', torch.tensor(0.0))
             kd_penultimate_loss = loss_dict.get('kd_penultimate_loss', torch.tensor(0.0))
@@ -180,8 +171,8 @@ class Trainer:
             losses.append(loss.detach().item() * self.training_args.gradient_accumulation_steps)
             contrastive_losses.append(contrastive_loss.detach().item())
             kd_losses.append(kd_loss.detach().item())
-            kd_rkd_losses.append(kd_rkd_loss.detach().item())
-            ot_losses.append(ot_loss.detach().item())
+            kd_simcse_losses.append(kd_simcse_loss.detach().item())
+            sigreg_losses.append(sigreg_loss.detach().item())
             kd_dtw_losses.append(kd_dtw_loss.detach().item())
             kd_mse_losses.append(kd_mse_loss.detach().item())
             kd_penultimate_losses.append(kd_penultimate_loss.detach().item())
@@ -189,8 +180,8 @@ class Trainer:
             batch_loss = sum(losses) / len(losses)
             batch_contrastive_loss = sum(contrastive_losses) / len(contrastive_losses)
             batch_kd_loss = sum(kd_losses) / len(kd_losses)
-            batch_kd_rkd_loss = sum(kd_rkd_losses) / len(kd_rkd_losses)
-            batch_ot_loss = sum(ot_losses) / len(ot_losses)
+            batch_kd_simcse_loss = sum(kd_simcse_losses) / len(kd_simcse_losses)
+            batch_sigreg_loss = sum(sigreg_losses) / len(sigreg_losses)
             batch_kd_dtw_loss = sum(kd_dtw_losses) / len(kd_dtw_losses)
             batch_kd_loss_mse = sum(kd_mse_losses) / len(kd_mse_losses)
             batch_kd_penultimate_loss = sum(kd_penultimate_losses) / len(kd_penultimate_losses)
@@ -207,8 +198,8 @@ class Trainer:
                         'loss': f"{batch_loss:.4f}",
                         'kd_loss': f"{batch_kd_loss:.4f}",
                         'contrastive_loss': f"{batch_contrastive_loss:.4f}",
-                        'kd_rkd_loss': f"{batch_kd_rkd_loss:.4f}",
-                        'ot_loss': f"{batch_ot_loss:.4f}",
+                        'kd_simcse_loss': f"{batch_kd_simcse_loss:.4f}",
+                        'sigreg_loss': f"{batch_sigreg_loss:.4f}",
                         'kd_dtw_loss': f"{batch_kd_dtw_loss:.4f}",
                         'kd_loss_mse': f"{batch_kd_loss_mse:.4f}",
                         'kd_penultimate_loss': f"{batch_kd_penultimate_loss:.4f}",
@@ -216,41 +207,26 @@ class Trainer:
                     })
                     progress_bar.update(1)
 
-                    # <--- [THÊM] Log metrics vào wandb
-                    if self.use_wandb:
-                        # Log loss trung bình (cumulative average) hoặc loss tức thời (instant)
-                        # Ở đây mình log loss trung bình tích lũy giống như progress bar
-                        wandb.log({
-                            "train/loss": batch_loss,
-                            "train/kd_loss": batch_kd_loss,
-                            "train/contrastive_loss": batch_contrastive_loss,
-                            "train/kd_rkd_loss": batch_kd_rkd_loss,
-                            "train/ot_loss": batch_ot_loss,
-                            "train/kd_dtw_loss": batch_kd_dtw_loss,
-                            "train/kd_loss_mse": batch_kd_loss_mse,
-                            "train/kd_penultimate_loss": batch_kd_penultimate_loss,
-                            "train/learning_rate": current_lr,
-                            "train/epoch": epoch + ((batch_idx + 1) / self.training_args.gradient_accumulation_steps) / steps_per_epoch
-                        })
                 
             torch.cuda.empty_cache()
         progress_bar.close()
         
     def train(self):
         # <--- [THÊM] Khởi tạo wandb run
-        if self.use_wandb:
+        # if self.use_wandb:
            
-            all_config = {}
-            if self.model_args: all_config.update(vars(self.model_args))
-            if self.data_args: all_config.update(vars(self.data_args))
-            if self.training_args: all_config.update(vars(self.training_args))
+        #     all_config = {}
+        #     if self.model_args: all_config.update(vars(self.model_args))
+        #     if self.data_args: all_config.update(vars(self.data_args))
+        #     if self.training_args: all_config.update(vars(self.training_args))
 
-            wandb.init(
-                project="VLM_Embed_distill",
-                config=all_config,
-                reinit=True
-            )
+        #     wandb.init(
+        #         project="VLM_Embed_distill",
+        #         config=all_config,
+        #         reinit=True
+        #     )
 
+        # print(f"Training Args:{self.training_args}")
         for epoch in range(self.training_args.num_train_epochs):
             self.run_epoch(epoch)
             if is_main_process() and self.training_args.save_strategy == "epoch":
@@ -263,7 +239,6 @@ class Trainer:
                 if self.model_args.model_backbone in ["llava_onevision", "llava_two_vision"]:
                     torch.save(model.encoder.model.multi_modal_projector.state_dict(), projector_dir)
                 else:
-                    # if hasattr(student.encoder.model.model, 'mm_projector'):
                     torch.save(model.encoder.model.model.mm_projector.state_dict(), projector_dir)
                 model_config = AutoConfig.from_pretrained(self.model_args.model_name) if self.model_args.model_name else None
                 tokenizer = AutoTokenizer.from_pretrained(self.model_args.model_name) if self.model_args.model_name else None
@@ -303,8 +278,8 @@ class Trainer:
                 print_rank(f"Warning: Could not save processor: {e}")
             print_rank(f"Saved final model to {final_ckpt_dir}")
             
-            if self.use_wandb:
-                wandb.finish()
+            # if self.use_wandb:
+            #     wandb.finish()
                 
 def main():
     for arg in sys.argv:
@@ -320,7 +295,7 @@ def main():
     training_args: TrainingArguments
     
     rank = dist.get_rank()
-    seed_everything(training_args.seed, rank=rank) 
+    # seed_everything(training_args.seed, rank=rank) 
     
     model_wrapper = SingleWrapper(model_args, training_args)
     train_dataset = prepare_dataset(data_args, model_args)

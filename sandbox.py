@@ -1,223 +1,111 @@
-import argparse
-import random
-from pathlib import Path
+import sys
 
 import torch
 import torch.nn.functional as F
+from PIL import Image
+
+from src.arguments import ModelArguments, DataArguments
+from src.model.model import MMEBModel
+from src.model.model import MMEBModel
+from src.model.processor import QWEN3_VL, Qwen3_VL_process_fn
+from src.model.vlm_backbone.qwen3_vl_embedding import (
+    Qwen3VLForEmbedding,
+    Qwen3VLProcessor,
+)
+from src.model.processor import load_processor
 
 
-torch.set_printoptions(precision=4, sci_mode=False)
-
-CACHE_ROOT = Path("caching")
-MODEL_DIRS = {
-    "b3": CACHE_ROOT / "B3_Qwen2_2B_cls",
-    "fastvlm": CACHE_ROOT / "FastVLM-0.5B_base_8",
-}
+model_name = "Qwen/Qwen3-VL-Embedding-2B"
+device = "cuda"
 
 
-def list_cached_datapoints(model_dir: Path) -> set[str]:
-    """Return datapoint dirs relative to model_dir that contain qry.pt and pos.pt."""
-    datapoints = set()
+model_args = ModelArguments(
+    model_name=model_name,
+    pooling='last',
+    normalize=True,
+    model_backbone='qwen3_vl',
+    lora=False,
+)
 
-    for qry_path in model_dir.glob("*/*/qry.pt"):
-        datapoint_dir = qry_path.parent
-        if (datapoint_dir / "pos.pt").is_file():
-            datapoints.add(datapoint_dir.relative_to(model_dir).as_posix())
+model = MMEBModel.load(model_args).eval().to(device)
+processor = load_processor(model_args, None)
 
-    return datapoints
+image = Image.open("example.jpg").convert("RGB")
 
+inputs = Qwen3_VL_process_fn(
+    model_inputs={
+        "text": ["<|image_pad|> Represent this image", "<|image_pad|> Represent this image"],
+        "images": [[image.resize((128, 128))], [image.resize((128, 64))]],
+    },
+    processor=processor
+)
+inputs = {key: value.to(device) for key, value in inputs.items()}
 
-def sample_common_datapoints(
-    model_dirs: dict[str, Path],
-    num_samples: int,
-    seed: int | None = None,
-) -> list[str]:
-    common_datapoints = None
+input_ids = inputs["input_ids"]
+attention_mask = inputs["attention_mask"]
 
-    for model_dir in model_dirs.values():
-        cached_datapoints = list_cached_datapoints(model_dir)
-        common_datapoints = (
-            cached_datapoints
-            if common_datapoints is None
-            else common_datapoints & cached_datapoints
-        )
+tokenizer = processor.tokenizer
 
-    if not common_datapoints:
-        raise RuntimeError("No common cached datapoints found across all models.")
+for i in range(input_ids.size(0)):
+    ids = input_ids[i]
+    mask = attention_mask[i].bool()
 
-    common_datapoints = sorted(common_datapoints)
-    if num_samples > len(common_datapoints):
-        raise ValueError(
-            f"Requested {num_samples} samples, but only "
-            f"{len(common_datapoints)} common datapoints are available."
-        )
+    valid_ids = ids[mask]
+    valid_tokens = tokenizer.convert_ids_to_tokens(valid_ids.tolist())
+    decoded = tokenizer.decode(valid_ids, skip_special_tokens=False)
 
-    rng = random.Random(seed)
-    return rng.sample(common_datapoints, num_samples)
+    print(f"\n{'=' * 80}")
+    print(f"SAMPLE {i}")
+    print(f"{'=' * 80}")
 
+    print("Sequence length:", ids.numel())
+    print("Valid length:", mask.sum().item())
 
-def load_cache_matrix(model_dir: Path, datapoints: list[str], name: str) -> torch.Tensor:
-    reps = [
-        torch.load(model_dir / datapoint / name, map_location="cpu")
-        for datapoint in datapoints
-    ]
-    return torch.stack(reps, dim=0)
+    print("\nINPUT IDS:")
+    print(valid_ids.tolist())
 
+    print("\nTOKENS:")
+    for j, (token_id, token) in enumerate(zip(valid_ids.tolist(), valid_tokens)):
+        print(f"{j:4d} | {token_id:6d} | {repr(token)}")
 
-def load_sampled_cache_matrices(
-    num_samples: int = 8,
-    seed: int | None = 42,
-) -> tuple[list[str], dict[str, dict[str, torch.Tensor]]]:
-    datapoints = sample_common_datapoints(MODEL_DIRS, num_samples, seed)
+    print("\nDECODED:")
+    print(decoded)
 
-    matrices = {}
-    for model_name, model_dir in MODEL_DIRS.items():
-        matrices[model_name] = {
-            "qry": load_cache_matrix(model_dir, datapoints, "qry.pt"),
-            "pos": load_cache_matrix(model_dir, datapoints, "pos.pt"),
-        }
+with torch.inference_mode():
+    pooled_output, _, attention_matrix, output_hidden_states = model.encode_input(inputs)
 
-    return datapoints, matrices
+hidden = output_hidden_states[-1]
 
+print("\n" + "=" * 80)
+print("HIDDEN STATE CHECK")
+print("=" * 80)
 
-def cosine_similarity_matrix(
-    qry_matrix: torch.Tensor,
-    pos_matrix: torch.Tensor,
-) -> torch.Tensor:
-    if qry_matrix.ndim != 2 or pos_matrix.ndim != 2:
-        raise ValueError(
-            f"qry_matrix and pos_matrix must be 2D, got "
-            f"{tuple(qry_matrix.shape)} and {tuple(pos_matrix.shape)}."
-        )
-    if qry_matrix.size(-1) != pos_matrix.size(-1):
-        raise ValueError(
-            f"qry_matrix and pos_matrix must have the same embedding dim, got "
-            f"{qry_matrix.size(-1)} and {pos_matrix.size(-1)}."
-        )
+print("input_ids shape:     ", tuple(inputs["input_ids"].shape))
+print("attention_mask shape:", tuple(inputs["attention_mask"].shape))
+print("hidden shape:        ", tuple(hidden.shape))
 
-    qry_matrix = F.normalize(qry_matrix.float(), dim=-1)
-    pos_matrix = F.normalize(pos_matrix.float(), dim=-1)
-    return qry_matrix @ pos_matrix.T
+print("\nPadded sequence length:")
+print("input_ids:", inputs["input_ids"].shape[1])
+print("hidden:   ", hidden.shape[1])
+print("same:", inputs["input_ids"].shape[1] == hidden.shape[1])
 
+for i in range(hidden.size(0)):
+    mask = inputs["attention_mask"][i].bool()
 
-def cosine_similarity_matrices_by_model(
-    matrices: dict[str, dict[str, torch.Tensor]],
-) -> dict[str, torch.Tensor]:
-    return {
-        model_name: cosine_similarity_matrix(model_matrices["qry"], model_matrices["pos"])
-        for model_name, model_matrices in matrices.items()
-    }
+    num_input_tokens = inputs["input_ids"][i].numel()
+    num_valid_tokens = mask.sum().item()
+    num_hidden_tokens = hidden[i].shape[0]
+    num_valid_hidden_tokens = hidden[i][mask].shape[0]
 
+    print(f"\nSAMPLE {i}")
+    print(f"input tokens (with padding):  {num_input_tokens}")
+    print(f"valid input tokens:           {num_valid_tokens}")
+    print(f"hidden tokens (with padding): {num_hidden_tokens}")
+    print(f"valid hidden tokens:          {num_valid_hidden_tokens}")
 
-def compute_effective_rank(
-    matrix: torch.Tensor,
-    eps: float = 1e-10,
-) -> torch.Tensor:
-    if matrix.ndim != 2:
-        raise ValueError(f"matrix must be 2D, got shape {tuple(matrix.shape)}.")
-
-    x = matrix.float()
-    n = min(x.size(0), x.size(1))
-    s = torch.linalg.svdvals(x) / torch.sqrt(torch.tensor(n, device=x.device))
-    eigvals = s * s
-    prob = eigvals.clamp(min=eps) / eigvals.sum()
-    entropy = -(prob * torch.log(prob)).sum()
-    return torch.exp(entropy) 
-
-
-def effective_ranks_by_model(
-    matrices: dict[str, dict[str, torch.Tensor]],
-) -> dict[str, dict[str, torch.Tensor]]:
-    return {
-        model_name: {
-            "qry": compute_effective_rank(model_matrices["qry"]),
-            "pos": compute_effective_rank(model_matrices["pos"]),
-            "qry_pos": compute_effective_rank(
-                torch.cat([model_matrices["qry"], model_matrices["pos"]], dim=0)
-            ),
-        }
-        for model_name, model_matrices in matrices.items()
-    }
-
-
-def format_matrix(
-    matrix: torch.Tensor,
-    precision: int = 4,
-    width: int = 8,
-) -> str:
-    if matrix.ndim != 2:
-        raise ValueError(f"matrix must be 2D, got shape {tuple(matrix.shape)}.")
-
-    rows = matrix.detach().cpu().float().tolist()
-    return "\n".join(
-        "[" + " ".join(f"{value:{width}.{precision}f}" for value in row) + "]"
-        for row in rows
+    print(
+        "valid lengths match:",
+        num_valid_tokens == num_valid_hidden_tokens
     )
 
-
-def print_matrix(
-    name: str,
-    matrix: torch.Tensor,
-    precision: int = 4,
-    width: int = 8,
-) -> None:
-    print(f"\n{name}:")
-    print(format_matrix(matrix, precision=precision, width=width))
-
-
-def print_effective_ranks(
-    eranks: dict[str, dict[str, torch.Tensor]],
-) -> None:
-    print("\nEffective ranks:")
-    for model_name, model_eranks in eranks.items():
-        qry_erank = model_eranks["qry"].item()
-        pos_erank = model_eranks["pos"].item()
-        qry_pos_erank = model_eranks["qry_pos"].item()
-        print(
-            f"{model_name}: "
-            f"qry={qry_erank:.4f}, "
-            f"pos={pos_erank:.4f}, "
-            f"qry_pos={qry_pos_erank:.4f}"
-        )
-
-
-def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--num-samples", type=int, default=8)
-    parser.add_argument("--seed", type=int, default=42)
-    return parser.parse_args()
-
-
-if __name__ == "__main__":
-    args = parse_args()
-    sampled_datapoints, sampled_matrices = load_sampled_cache_matrices(
-        num_samples=args.num_samples,
-        seed=args.seed,
-    )
-
-    b3_qry_matrix = sampled_matrices["b3"]["qry"]
-    b3_pos_matrix = sampled_matrices["b3"]["pos"]
-    fastvlm_qry_matrix = sampled_matrices["fastvlm"]["qry"]
-    fastvlm_pos_matrix = sampled_matrices["fastvlm"]["pos"]
-    cosine_matrices = cosine_similarity_matrices_by_model(sampled_matrices)
-    effective_ranks = effective_ranks_by_model(sampled_matrices)
-    b3_cosine_matrix = cosine_matrices["b3"]
-    fastvlm_cosine_matrix = cosine_matrices["fastvlm"]
-
-    # print("Sampled datapoints:")
-    # for datapoint in sampled_datapoints:
-    #     print(f"- {datapoint}")
-
-    # print("\nMatrix shapes:")
-    # print(f"b3_qry_matrix: {tuple(b3_qry_matrix.shape)}")
-    # print(f"b3_pos_matrix: {tuple(b3_pos_matrix.shape)}")
-    # print(f"fastvlm_qry_matrix: {tuple(fastvlm_qry_matrix.shape)}")
-    # print(f"fastvlm_pos_matrix: {tuple(fastvlm_pos_matrix.shape)}")
-
-    # print("\nCosine matrix shapes:")
-    # print(f"b3_cosine_matrix: {tuple(b3_cosine_matrix.shape)}")
-    # print(f"fastvlm_cosine_matrix: {tuple(fastvlm_cosine_matrix.shape)}")
-
-    # print_matrix("B3 query-pos cosine matrix", b3_cosine_matrix)
-    # print_matrix("FastVLM query-pos cosine matrix", fastvlm_cosine_matrix)
-    print_effective_ranks(effective_ranks)
+print(processor.image_token_id)
