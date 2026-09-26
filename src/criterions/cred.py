@@ -8,9 +8,9 @@ import math
 from torch.nn.utils.rnn import pad_sequence
 
 
-class TalasJepa(nn.Module):
+class CRED(nn.Module):
     def __init__(self, args):
-        super(TalasJepa, self).__init__()
+        super(CRED, self).__init__()
         self.args = args
         if dist.is_initialized():
             self.world_size = dist.get_world_size()

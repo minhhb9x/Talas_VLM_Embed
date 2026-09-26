@@ -1,17 +1,15 @@
 SUBSETS=(
-  # "ImageNet-1K" "N24News" "HatefulMemes" "VOC2007" "SUN397" 
-  # "Place365" "ImageNet-A" "ImageNet-R" "ObjectNet" "Country211"
+  "ImageNet-1K" "N24News" "HatefulMemes" "VOC2007" "SUN397" 
+  "Place365" "ImageNet-A" "ImageNet-R" "ObjectNet" "Country211"
   # "OK-VQA" "A-OKVQA" "DocVQA" "InfographicsVQA" "ChartQA" "Visual7W"
-  "ScienceQA" "VizWiz" "GQA" "TextVQA"
+  # "ScienceQA" "VizWiz" "GQA" "TextVQA"
 )
 
-# MODEL=training/FastVLM-0.5B_base_16_eos_cls/checkpoint-final
-MODEL=meta_train/span_propose_llava_ov_vqa_v2_final
-
+MODEL=training/FastVLM-0.5B_base_16_eos_cls/checkpoint-final
 
 CUDA_VISIBLE_DEVICES=1 python eval_mmeb_2.py \
     --model_name $MODEL \
-    --encode_output_path './MMEB-eval_outputs/span_propose_llava_ov_vqa_v2_final_2_24/' \
+    --encode_output_path './MMEB-eval_outputs/FastVLM-0.5B_base_16_eos_cls/' \
     --lora True --lora_r 64 --lora_alpha 64 \
     --pooling eos \
     --model_backbone llava_onevision_old \

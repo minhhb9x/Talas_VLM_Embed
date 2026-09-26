@@ -1,4 +1,4 @@
-# VLMEmbed
+# CRED: Cross-Layer Participation Regularization Against Token Collapse in Vision-Language Embedding Distillation
 ## Set up env
 ```bash
 apt-get update
@@ -30,7 +30,7 @@ bash download_traindata_2.sh
 
 Because of the error of code in **Transformers library**, run the following script to find the error and comment some lines: 
 
-Just comment the following code, from line 140 to 143 in file **/vlm/lib/python3.12/site-packages/transformers/models/qwen2_vl/image_processing_qwen2_vl.py**: 
+Just comment the following code, from line 139 to 143 in file **/vlm/lib/python3.12/site-packages/transformers/models/qwen2_vl/image_processing_qwen2_vl.py** (change the lib directory based on python version): 
 ```python
 if size is not None and ("shortest_edge" not in size or "longest_edge" not in size):
     raise ValueError("size must contain 'shortest_edge' and 'longest_edge' keys.")
@@ -42,18 +42,19 @@ Or run `fix_lib.py` to fix:
 python fix_lib.py
 ```
 
-## Training
-
-Just run the scripts in folder `scripts`
-- For run RKD: 
+## Caching
+Caching teacher output tensor for the following distillation:
 ```bash
-bash scripts/train_RKD.sh
-bash scripts/train_distill_propose_V.sh
+bash scripts/teacher_cache_cls.sh
+bash scripts/teacher_cache_vqa.sh
 ```
-## Inference & Evaluation
-1. To evaluate our model on an MMEB dataset (e.g., MSCOCO_i2t), run:
-```bash 
-bash eval.sh
+
+## Training and evaluation
+
+Just run the scripts to train and evaluate in folder `scripts`
+```bash
+bash scripts/train_distill_cred_cls.sh
+bash scripts/train_distill_cred_vqa.sh
 ```
 
 ## Acknowledgement
