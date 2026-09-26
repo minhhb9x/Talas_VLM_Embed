@@ -20,11 +20,9 @@ hf download TIGER-Lab/MMEB-eval images.zip \
   --local-dir .
 unzip images.zip -d eval_images/
 ```
-2. Download train image, it can take > 1 hour to download
+2. Download train image, can select subsets in `download.py`:
 ```bash
-cd VLM_Embed
-bash download_traindata.sh
-bash download_traindata_2.sh
+python download.py
 ```
 3. Fix some line code 
 

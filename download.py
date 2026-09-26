@@ -18,8 +18,8 @@ files = {
     "DocVQA": "images_zip/DocVQA.zip",
     "InfographicsVQA": "images_zip/InfographicsVQA.zip",
     "ChartQA": "images_zip/ChartQA.zip",
-    "Visual7W": "images_zip/Visual7W.zip"
-    "MSCOCO": "images_zip/MSCOCO.zip"
+    "Visual7W": "images_zip/Visual7W.zip",
+    "MSCOCO": "images_zip/MSCOCO.zip",
 }
 
 dataset = "TIGER-Lab/MMEB-train"
